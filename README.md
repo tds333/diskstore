@@ -1,6 +1,6 @@
 # DiskStore Sqlite based disk store
 
-`DiskStore`_ is an Apache2/MIT licensed disk storage library, written
+`DiskStore` is an Apache2/MIT licensed disk storage library, written
 in pure Python.
 
 Inspired by DiskCache library it implements a MutableMapping compatible sqlite
@@ -88,5 +88,3 @@ Unless required by applicable law or agreed to in writing, software distributed
 under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
 CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
-
-.. _`DiskStore`: 

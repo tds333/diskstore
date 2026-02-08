@@ -32,7 +32,6 @@ jobs:
       uses: astral-sh/setup-uv@v6
       with:
         python-version: ${{ matrix.python-version }}
-        allow-prereleases: true
 
     - name: Run tests
       run: make cov
