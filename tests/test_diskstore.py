@@ -1169,7 +1169,7 @@ def test_busy(tmpfilename):
     def thread_run():
         with store.transact(retry=False):
             store[1] = Value("2")
-            time.sleep(0.02)
+            time.sleep(0.05)
 
     thread = threading.Thread(target=thread_run)
     thread.start()
