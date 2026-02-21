@@ -1,11 +1,12 @@
-"""Core disktore API."""
+"""Default constants used in diskstore."""
 
 from typing import (
     TypeAlias,
     Union,
 )
 
-TIMEOUT = 60.0  # in seconds
+TIMEOUT = 60.0
+"default timout in seconds"
 
 MISSING = object()
 
@@ -19,6 +20,7 @@ DEFAULT_PRAGMAS = {
     "temp_store": "memory",
     # "pargma_busy_timeout": 5000,  # milliseconds
 }
+"default pragma settings"
 
 
 AnyLite: TypeAlias = Union[bytes, str, int, float]

@@ -34,13 +34,14 @@ class DiskCache:
     def __init__(
         self,
         filename: os.PathLike | str,
-        default_expiration=60.0,
+        default_expiration=TIMEOUT,
     ) -> None:
         """Initialize DiskCache instance.
 
-        :param str filename: DiskStore DB filename.
-                              If not set a tmp directory and default DB name is created.
-        :param float default_expiration: Default expiration value in seconds (float)
+        Arguments:
+            filename: DiskStore DB filename.
+                      If not set a tmp directory and default DB name is created.
+            default_expiration: Default expiration value in seconds (float)
         """
         self._diskstore = DiskStore(
             filename=filename,

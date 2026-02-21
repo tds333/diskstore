@@ -1,4 +1,13 @@
-"""DiskRead (Mapping) API."""
+"""DiskRead (Mapping) API.
+
+Examples:
+    >>> from diskstore import DiskRead
+    # DB must exist!
+    >>> ds = DiskRead("/tmp/data.db")
+    >>> ds["one"]
+    Value(value=1)
+
+"""
 
 import os
 import os.path
@@ -19,6 +28,11 @@ BasicType: TypeAlias = Union[bytes, str, int, float]
 
 
 class Value(NamedTuple):
+    """Basic NamedTuple Value class.
+
+    Usable to create key value mappings.
+    """
+
     value: BasicType
 
     def __float__(self):
@@ -76,23 +90,24 @@ class DiskItemsView(ItemsView):
 
 
 class DiskRead(Mapping):
-    """SQLite read only disk storage. Does not connect on init!"""
-
-    def __init__(  # noqa: PLR0915
+    def __init__(
         self,
         filename: os.PathLike | str,
-        value_class=None,
-        tablename: str | None = None,
-        timeout=None,
+        value_class: type[NamedTuple] = Value,
+        tablename: str = "",
+        timeout: float = TIMEOUT,
     ) -> None:
-        """Initialize cache instance.
+        """SQLite read only disk storage.
 
-        :param str filename: filename for DB to use.
-        :param str tablename: Optional table name to use.
-        :param type value_class: Class type (inherited from NamedTuple)
-                                 used to get back data.
-        :param float timeout: SQLite connection timeout
-                              (also used if DB is busy to retry)
+        Database is opened read only on demand.
+
+        Args:
+           filename: filename for DB to use.
+           value_class: Class type (inherited from NamedTuple)
+                              used to get back data.
+           tablename: Optional table name to use.
+           timeout: SQLite busy timeout in seconds
+
         """
         filename = os.path.expanduser(filename)
         filename = os.path.expandvars(filename)
@@ -102,12 +117,12 @@ class DiskRead(Mapping):
             self._value_class = value_class
         self._tablename = (
             self._value_class.__name__
-            if tablename is None or tablename == "_Settings"
+            if not tablename or tablename == "_Settings"
             else tablename
         )
 
         self._filename = os.fspath(filename)
-        self._timeout: float = TIMEOUT if timeout is None else float(timeout)
+        self._timeout: float = TIMEOUT if timeout < 0.0 else float(timeout)
         self._local = threading.local()
 
         # precreated statements based on tablename and value_class
@@ -151,6 +166,7 @@ class DiskRead(Mapping):
 
     @property
     def tablename(self) -> str:
+        """Tablename used to get data from."""
         return self._tablename
 
     @property

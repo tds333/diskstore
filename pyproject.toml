@@ -3,65 +3,77 @@ name = "diskstore"
 version = "0.1.0"
 description = "Simple MutableMapping compatible SQLite based disk storage."
 readme = "README.md"
-authors = [{ name = "tds333", email = "tds333@mailbox.org" }]
 requires-python = ">=3.10"
-dependencies = ["apsw"]
+authors = [{ name = "tds333", email = "tds333@mailbox.org" }]
+dependencies = [
+  "apsw",
+]
 
+[dependency-groups]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-env",
+  "pytest-examples>=0.0.18",
+  "pytest-xdist",
+]
+benchmark = [
+  "diskcache",
+  "ipython",
+  "pickleDB<1",
+  "pylibmc",
+  "redis",
+  "sqlitedict",
+]
+docs = [
+  "mkdocs>=1.6.1",
+  "mkdocstrings[python]>=1.0.3",
+  "zensical>=0.0.23",
+]
+infra = [
+    "pyinfra>=3.6.1",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.11.0"]
 build-backend = "uv_build"
-
 
 [tool.coverage.run]
 parallel = true
 branch = true
 source = ["diskstore"]
 
-
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
 exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
 
-
-[tool.pytest.ini_options]
-#pythonpath = ["src"]
+[tool.pytest]
+# pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]
 exclude = [".env", ".venv", "venv"]
 line-length = 88
+
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "W",  # pycodestyle warnings
-    "F",  # pyflakes
-    "I",  # isort
-    "C",  # flake8-comprehensions
-    "B",  # flake8-bugbear
-    "PT", # flake8-pytest
-    "N",  # naming
-    #"D",  # docu
-    "PL", # pylint
-    "R",  # ruff
-
+  "E",  # pycodestyle errors
+  "W",  # pycodestyle warnings
+  "F",  # pyflakes
+  "I",  # isort
+  "C",  # flake8-comprehensions
+  "B",  # flake8-bugbear
+  "PT",  # flake8-pytest
+  "N",  # naming
+  # "D",  # docu
+  "PL",  # pylint
+  "RUF",  # ruff
 ]
 ignore = [
-    #"E501", # line too long, handled by black
-    "B008",   # do not perform function calls in argument defaults
-    "C901",   # too complex
-    "RET504",
-]
-
-[dependency-groups]
-dev = ["pytest", "pytest-cov", "pytest-env", "pytest-xdist"]
-
-benchmark = [
-    "ipython",
-    "pickleDB<1",
-    "pylibmc",
-    "sqlitedict",
-    "redis",
-    "diskcache",
+  # "E501", # line too long, handled by black
+  "B008",  # do not perform function calls in argument defaults
+  "C901",  # too complex
+  "RET504",
+  "PLR2004",
 ]

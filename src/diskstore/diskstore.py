@@ -1,4 +1,13 @@
-"""DiskStore (MutableMapping) API."""
+"""DiskStore (MutableMapping) API.
+
+Examples:
+    >>> from diskstore import DiskStore, Value
+    >>> ds = DiskStore("/tmp/data.db", value_class=Value)
+    >>> ds["one"] = Value(1)
+    >>> ds["one"]
+    Value(value=1)
+
+"""
 
 import os
 import os.path
@@ -6,12 +15,12 @@ import threading
 from collections.abc import Mapping, MutableMapping
 from contextlib import closing, contextmanager
 from time import sleep, time
-from typing import Iterable
+from typing import Iterable, NamedTuple
 
 import apsw
 
 from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, KeyType
-from .diskread import DiskRead
+from .diskread import DiskRead, Value
 
 Connection = apsw.Connection
 Cursor = apsw.Cursor
@@ -20,29 +29,29 @@ BusyError = apsw.BusyError
 
 
 class DiskStore(DiskRead, MutableMapping):
-    """SQLite disk storage."""
-
-    def __init__(  # noqa: PLR0915
+    def __init__(  # noqa: PLR0913
         self,
         filename: os.PathLike | str,
-        value_class=None,
-        tablename: str | None = None,
-        key_type=None,
-        timeout: float | None = None,
+        value_class: type[NamedTuple] = Value,
+        tablename: str = "",
+        key_type: type = bytes,
+        timeout: float = TIMEOUT,
         alter_table: bool = True,
         **pragmas,
     ) -> None:
-        """Initialize Diskstore instance.
+        """SQLite based MutableMapping disk storage.
 
-        :param str filename: DiskStore DB filename.
-                              If not set a tmp directory and default DB name is created.
-        :param str tablename: Optional table name to use.
-                              If not set the name from value_class is used.
-        :param type value_class: Class type (inherited from NamedTuple)
-                                 used to get back data. Default is Value class.
-        :param float timeout: SQLite connection timeout
-                              (also used if DB is busy to retry)
-        :param pragmas: Any of DEFAULT_PRAGMAS or additional PRAGMA's to apply
+        Args:
+            filename: DiskStore DB filename.
+                      If not set a tmp directory and default DB name is created.
+            value_class: Class type (inherited from NamedTuple)
+                         used to get back data. Default is Value class.
+            tablename: Optional table name to use.
+                       If not set the name from value_class is used.
+            timeout: SQLite connection timeout
+                     (also used if DB is busy to retry)
+            pragmas: Dictinary containing the prama settings. Will be applied after
+                     connection before everything else.
         """
         super().__init__(
             filename=filename,
@@ -231,7 +240,7 @@ class DiskStore(DiskRead, MutableMapping):
 
         return rows[0][0]
 
-    def pop(self, key: KeyType, default=MISSING):  # noqa: E501
+    def pop(self, key: KeyType, default=MISSING):
         with self.transact(retry=True) as cx:
             value = next(cx.execute(self._statements["GET"], (key,)), None)
             if value is None:
@@ -289,7 +298,7 @@ class DiskStore(DiskRead, MutableMapping):
         with closing(self._con.execute(self._statements["CLEAR"])):
             pass
 
-    def update(self, other=(), /, **kwargs):  # type: ignore
+    def update(self, other=(), /, **kwargs):
         comps = []
         if other:
             if isinstance(other, Mapping):
