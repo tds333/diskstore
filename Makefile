@@ -56,7 +56,7 @@ bench-kv: ## run benchmarks kv
 
 .PHONY: docs
 docs: ## build docs
-	cd docs && $(MAKE) html
+	uv run --group docs zensical build
 
 ##@ Utility
 .PHONY: clean
