@@ -13,7 +13,6 @@ dependencies = [
 dev = [
   "pytest",
   "pytest-cov",
-  "pytest-env",
   "pytest-examples>=0.0.18",
   "pytest-xdist",
 ]
@@ -33,9 +32,6 @@ docs = [
 ext-dev = [
   "msgspec>=0.20.0",
   "pydantic>=2.12.5",
-]
-infra = [
-  "pyinfra>=3.6.1",
 ]
 
 [build-system]
