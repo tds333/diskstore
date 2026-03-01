@@ -9,6 +9,7 @@ Examples:
 
 """
 
+import dataclasses
 import os
 import os.path
 import threading
@@ -93,7 +94,7 @@ class DiskRead(Mapping):
     def __init__(
         self,
         filename: os.PathLike | str,
-        value_class: type[NamedTuple] = Value,
+        value_class: type = Value,
         tablename: str = "",
         timeout: float = TIMEOUT,
     ) -> None:
@@ -126,7 +127,7 @@ class DiskRead(Mapping):
         self._local = threading.local()
 
         # precreated statements based on tablename and value_class
-        tablename = self._escape_table_name(self._tablename)
+        tablename = self._escape_name(self._tablename)
         value_columns = self.get_fields(self._value_class)
         fields = ", ".join(f"{field}" for field in value_columns)
         self._statements: dict[str, str] = {
@@ -140,7 +141,23 @@ class DiskRead(Mapping):
 
     @staticmethod
     def get_fields(value_class):
-        value_columns = tuple(value_class._fields)
+        if hasattr(value_class, "_fields"):
+            value_columns = tuple(value_class._fields)
+        elif dataclasses.is_dataclass(value_class):
+            value_columns = tuple(
+                field.name for field in dataclasses.fields(value_class)
+            )
+        elif hasattr(value_class, "__struct_fields__"):  # support msgspec.Struct
+            value_columns = tuple(value_class.__struct_fields__)
+        elif hasattr(value_class, "model_fields"):  # support pydantic.BaseModel
+            value_columns = tuple(value_class.model_fields)
+        elif hasattr(value_class, "__annotations__"):
+            value_columns = tuple(value_class.__annotations__)
+        else:
+            raise AttributeError(
+                f"Class for values {value_class} has no attibute '_fields'"
+                " nor attribute '__annotations__'."
+            )
         if "_key" in value_columns:
             raise ValueError(
                 f"Name _key is not allowed as attribute for {value_class},"
@@ -150,7 +167,7 @@ class DiskRead(Mapping):
         return value_columns
 
     @staticmethod
-    def _escape_table_name(name: str) -> str:
+    def _escape_name(name: str) -> str:
         tablename = '"' + name.replace('"', '""') + '"'
         return tablename
 
@@ -207,7 +224,8 @@ class DiskRead(Mapping):
         if row is MISSING:
             raise KeyError(key)
 
-        return self._value_class(*row)  # ty:ignore[not-iterable]
+        # return self._value_class(*row)  # ty:ignore[not-iterable]
+        return self._value_class._make(row)  # ty:ignore[not-iterable]
 
     def keys(self):
         return DiskKeysView(self)
@@ -232,7 +250,8 @@ class DiskRead(Mapping):
         with self._cursor() as cursor:
             cursor.execute(select, parameters)
             for row in cursor:
-                yield row[0], self._value_class(*row[1:])
+                # yield row[0], self._value_class(*row[1:])
+                yield row[0], self._value_class._make(row[1:])
 
     def __contains__(self, key: object) -> bool:
         with self._cursor() as cx:

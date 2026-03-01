@@ -19,7 +19,7 @@ from typing import Iterable, NamedTuple
 
 import apsw
 
-from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, KeyType
+from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, AnyLite, KeyType
 from .diskread import DiskRead, Value
 
 Connection = apsw.Connection
@@ -32,11 +32,10 @@ class DiskStore(DiskRead, MutableMapping):
     def __init__(  # noqa: PLR0913
         self,
         filename: os.PathLike | str,
-        value_class: type[NamedTuple] = Value,
+        value_class: type = Value,
         tablename: str = "",
         key_type: type = bytes,
         timeout: float = TIMEOUT,
-        alter_table: bool = True,
         **pragmas,
     ) -> None:
         """SQLite based MutableMapping disk storage.
@@ -60,15 +59,9 @@ class DiskStore(DiskRead, MutableMapping):
             timeout=timeout,
         )
         self._txn_id = None
-        tablename = self._escape_table_name(self._tablename)
+        tablename = self._escape_name(self._tablename)
 
-        primary_key_type = "BLOB"
-        if key_type is str:
-            primary_key_type = "TEXT"
-        elif key_type is int:
-            primary_key_type = "INTEGER"
-        elif key_type is float:
-            primary_key_type = "REAL"
+        primary_key_type = self.get_sqlite_type(key_type)
         value_columns = self.get_fields(self._value_class)
         column_types = self.get_field_types(self._value_class)
         fields_create = ", ".join(
@@ -109,38 +102,40 @@ class DiskStore(DiskRead, MutableMapping):
         # Setup table.
         with closing(sql(self._statements["CREATE"])):
             pass
-        # try alter table if needed
-        if alter_table:
-            self._alter_table(sql)
+
+    @staticmethod
+    def get_sqlite_type(type_) -> str:
+        sqlite_type = "BLOB"
+        if type_ is str:
+            sqlite_type = "TEXT"
+        elif type_ is int:
+            sqlite_type = "INTEGER"
+        elif type_ is float:
+            sqlite_type = "REAL"
+
+        return sqlite_type
 
     @staticmethod
     def get_field_types(value_class):
-        value_columns = tuple(value_class._fields)
+        value_columns = DiskStore.get_fields(value_class)
         if hasattr(value_class, "__annotations__") and value_class.__annotations__:
             type_annotations = value_class.__annotations__
             value_types = []
             for c_name in value_columns:
                 type_cls = type_annotations.get(c_name, bytes)  # types are optional
-                if type_cls is str:
-                    value_types.append("TEXT")
-                elif type_cls is int:
-                    value_types.append("INTEGER")
-                elif type_cls is float:
-                    value_types.append("REAL")
-                else:
-                    value_types.append("BLOB")
+                sqlite_type = DiskStore.get_sqlite_type(type_cls)
+                value_types.append(sqlite_type)
         else:
             value_types = ["BLOB" for _ in value_columns]
 
         return value_types
 
-    def _validate_value(self, value):
-        if isinstance(value, self._value_class):
-            return value
-        value_type = type(value)
-        raise ValueError(
-            f"Value must be instance of {self._value_class} but is {value_type}."
+    @staticmethod
+    def get_field_defaults(value_class) -> dict[str, AnyLite]:
+        value_column_defaults: dict[str, AnyLite] = getattr(
+            value_class, "_field_defaults", {}
         )
+        return value_column_defaults
 
     @property
     def _con(self) -> Connection:
@@ -167,22 +162,44 @@ class DiskStore(DiskRead, MutableMapping):
 
         return con
 
-    def _alter_table(self, sql):
-        value_columns = self.get_fields(self._value_class)
-        column_types = self.get_field_types(self._value_class)
-        tablename = self._escape_table_name(self._tablename)
-        value_column_defaults = getattr(self._value_class, "_field_defaults", {})
+    # def _alter_table(self):
+    #     value_columns = self.get_fields(self._value_class)
+    #     column_types = self.get_field_types(self._value_class)
+    #     tablename = self._escape_name(self._tablename)
+    #     # value_column_defaults = getattr(self._value_class, "_field_defaults", {})
+    #     value_column_defaults = self.get_field_defaults(self._value_class)
+    #     existing_fileds = set()
+    #     table_info_stmt = f"PRAGMA table_info({tablename});"
+    #     sql = self._con.execute
+    #     with closing(sql(table_info_stmt)) as cursor:
+    #         for row in cursor:
+    #             existing_fileds.add(row[1])
+    #     for columnname, columntype in zip(value_columns, column_types, strict=True):
+    #         if columnname not in existing_fileds:
+    #             default = apsw.format_sql_value(value_column_defaults[columnname])
+    #             alter_stmt = (
+    #                 f"ALTER TABLE {tablename} ADD COLUMN {columnname}"
+    #                 f" {columntype} NOT NULL DEFAULT {default};"
+    #             )
+    #             with closing(sql(alter_stmt)) as cursor:
+    #                 pass
+
+    def _migrate_table(self, new_fields=()):
+        tablename = self._escape_name(self._tablename)
         existing_fileds = set()
         table_info_stmt = f"PRAGMA table_info({tablename});"
+        sql = self._con.execute
         with closing(sql(table_info_stmt)) as cursor:
             for row in cursor:
                 existing_fileds.add(row[1])
-        for columnname, columntype in zip(value_columns, column_types, strict=True):
+        for columnname, columntype, default_value in new_fields:
             if columnname not in existing_fileds:
-                default = apsw.format_sql_value(value_column_defaults[columnname])
+                name: str = self._escape_name(columnname)
+                type_ = self.get_sqlite_type(columntype)
+                default = apsw.format_sql_value(default_value)
                 alter_stmt = (
-                    f"ALTER TABLE {tablename} ADD COLUMN {columnname}"
-                    f" {columntype} NOT NULL DEFAULT {default};"
+                    f"ALTER TABLE {tablename} ADD COLUMN {name}"
+                    f" {type_} NOT NULL DEFAULT {default};"
                 )
                 with closing(sql(alter_stmt)) as cursor:
                     pass
@@ -226,12 +243,10 @@ class DiskStore(DiskRead, MutableMapping):
             cursor.close()
 
     def __setitem__(self, key: KeyType, value: Iterable) -> None:
-        value = self._validate_value(value)
         with self._cursor() as cursor:
             cursor.execute(self._statements["SET"], (key, *value))
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
-        value = self._validate_value(value)
         with self._cursor() as cx:
             rows = cx.execute(self._statements["ADD"], (key, *value)).fetchall()
 
@@ -271,7 +286,6 @@ class DiskStore(DiskRead, MutableMapping):
             return self[key]
         except KeyError:
             if default is not None:
-                default = self._validate_value(default)
                 self.add(key, default)
 
         return default

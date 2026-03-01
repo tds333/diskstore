@@ -23,6 +23,10 @@ tests: ## Run tests in all supporte Python versions
 		uv run --isolated -p $$py_v pytest -n auto; \
 	done
 
+.PHONY: ext-tests
+ext-tests: ## Run tests in all supporte Python versions
+	uv run --group ext-dev --isolated -p 3.14 pytest -n auto
+
 .PHONY: check
 check: ## Run all checks
 	-uvx ty check ${SOURCE_DIR}

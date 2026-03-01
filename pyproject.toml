@@ -1,6 +1,6 @@
 [project]
 name = "diskstore"
-version = "0.1.0"
+version = "0.2.0"
 description = "Simple MutableMapping compatible SQLite based disk storage."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -30,8 +30,12 @@ docs = [
   "mkdocstrings[python]>=1.0.3",
   "zensical>=0.0.23",
 ]
+ext-dev = [
+  "msgspec>=0.20.0",
+  "pydantic>=2.12.5",
+]
 infra = [
-    "pyinfra>=3.6.1",
+  "pyinfra>=3.6.1",
 ]
 
 [build-system]

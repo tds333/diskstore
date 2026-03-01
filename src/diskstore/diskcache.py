@@ -16,7 +16,7 @@ class CacheValue(NamedTuple):
     value: bytes
     expires_at: float
 
-    def load(self, expire_timestamp, default=MISSING):
+    def load(self, default=MISSING):
         expires_at = self[1]
         if expires_at == 0.0 or expires_at > time():
             return pickle.loads(self[0])
@@ -80,7 +80,7 @@ class DiskCache:
         except KeyError:
             return default
 
-        return result.load(expire_timestamp=time(), default=default)
+        return result.load(default=default)
 
     def add(self, key, value, expire=None):
         bin_key = pickle.dumps(key)
