@@ -20,6 +20,7 @@ import pytest
 
 import diskstore as ds
 from diskstore import DiskStore, Value
+from diskstore.config import BaseConfig, DataclassConfig, JsonConfig, NamedTupleConfig
 from diskstore.diskstore import BusyError
 
 
@@ -38,7 +39,7 @@ def tmpfilename(tmpdir):
 
 @pytest.fixture
 def store(tmpfilename):
-    with ds.DiskStore(tmpfilename, value_class=Value) as store:
+    with ds.DiskStore(tmpfilename) as store:
         yield store
     store.close()
     # if store.filename and store.filename != ":memory:":
@@ -52,14 +53,14 @@ def test_init(tmpfilename) -> None:
 
 
 def test_init_tablename(tmpfilename) -> None:
-    store = ds.DiskStore(tmpfilename, tablename="other table 1")
+    store = ds.DiskStore(tmpfilename, BaseConfig(tablename="other table 1"))
     assert store.check() == []
     store.close()
 
 
 def test_init_tablename_escape(tmpfilename) -> None:
-    store = ds.DiskStore(tmpfilename, tablename='other "table" 1')
-    store[0] = Value(0)
+    store = ds.DiskStore(tmpfilename, BaseConfig(tablename='other "table" 1'))
+    store[0] = 0
     assert store.check() == []
     store.close()
 
@@ -130,7 +131,9 @@ def test_migrate_table(tmpfilename) -> None:
         offset: float = 1.1
         garbage: bytes = b"A"
 
-    base = DiskStore(tmpfilename, value_class=MyData, tablename="data")
+    base = DiskStore(
+        tmpfilename, NamedTupleConfig(value_class=MyData, tablename="data")
+    )
     values = []
     for i in range(10):
         value = MyData(f"my number {i}")
@@ -142,7 +145,8 @@ def test_migrate_table(tmpfilename) -> None:
         assert base[key] == value
 
     base_new = DiskStore(
-        filename=base.filename, value_class=MyNewData, tablename="data"
+        filename=base.filename,
+        config=NamedTupleConfig(value_class=MyNewData, tablename="data"),
     )
     new_fields = [
         ("label", str, ""),
@@ -170,7 +174,9 @@ def test_migrate_table_on_old(tmpfilename) -> None:
         name: str
         timestamp: float = time.time()
 
-    base = DiskStore(tmpfilename, value_class=MyData, tablename="data")
+    base = DiskStore(
+        tmpfilename, NamedTupleConfig(value_class=MyData, tablename="data")
+    )
     values = []
     for i in range(10):
         value = MyData(f"my number {i}")
@@ -199,11 +205,7 @@ def test_migrate_table_on_old(tmpfilename) -> None:
 
 def test_binary(tmpfilename) -> None:
     with ds.DiskStore(tmpfilename) as store:
-        values = [
-            Value(
-                b"string",
-            )
-        ]
+        values = [b"string"]
 
         for key, value in enumerate(values):
             store[key] = value
@@ -213,51 +215,51 @@ def test_binary(tmpfilename) -> None:
 
 
 def test_key_type_int(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, key_type=int) as store:
-        store[0] = Value("0")
-        store["1"] = Value("1")
+    with ds.DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
+        store[0] = "0"
+        store["1"] = "1"
         # special, integer primary key is rowid and NULL values get
         # rowid incremental assigned
-        store[None] = Value("2")
-        store[None] = Value("3")
-        assert store[0] == Value("0")
-        assert store[1] == Value("1")
-        assert store[2] == Value("2")
-        assert store[3] == Value("3")
-        store[1] = Value("one")
-        assert store["1"] == Value("one")
-        assert store[1] == Value("one")
-        assert store[1.0] == Value("one")
-        assert store["1.0"] == Value("one")
+        store[None] = "2"
+        store[None] = "3"
+        assert store[0] == "0"
+        assert store[1] == "1"
+        assert store[2] == "2"
+        assert store[3] == "3"
+        store[1] = "one"
+        assert store["1"] == "one"
+        assert store[1] == "one"
+        assert store[1.0] == "one"
+        assert store["1.0"] == "one"
 
 
 def test_key_type_str(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, key_type=str) as store:
-        store["1"] = Value("1")
-        assert store["1"] == Value("1")
-        store[1] = Value("2")
-        assert store[1] == Value("2")
+    with ds.DiskStore(tmpfilename, BaseConfig(key_type=str)) as store:
+        store["1"] = "1"
+        assert store["1"] == "1"
+        store[1] = "2"
+        assert store[1] == "2"
 
 
 def test_key_type_float(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, key_type=float) as store:
-        store[0.0] = Value("0")
-        store["1.0"] = Value("1")
-        assert store[0] == Value("0")
-        assert store[1] == Value("1")
-        store[1.0] = Value("one")
-        assert store["1.0"] == Value("one")
+    with ds.DiskStore(tmpfilename, BaseConfig(key_type=float)) as store:
+        store[0.0] = "0"
+        store["1.0"] = "1"
+        assert store[0] == "0"
+        assert store[1] == "1"
+        store[1.0] = "one"
+        assert store["1.0"] == "one"
 
 
 def test_key_type_blob(tmpfilename) -> None:
     with ds.DiskStore(tmpfilename) as store:
-        store["1"] = Value("1")
-        assert store["1"] == Value("1")
-        store[1] = Value("2")
-        assert store[1] == Value("2")
-        assert store["1"] == Value("1")
-        store[1.0] = Value("1.0")
-        assert store[1.0] == Value("1.0")
+        store["1"] = "1"
+        assert store["1"] == "1"
+        store[1] = "2"
+        assert store[1] == "2"
+        assert store["1"] == "1"
+        store[1.0] = "1.0"
+        assert store[1.0] == "1.0"
 
 
 def test_close_error(store) -> None:
@@ -277,13 +279,13 @@ def test_close_error(store) -> None:
 
 def test_getsetdel(store) -> None:
     values = [
-        Value(1234),
-        Value(2**12),
-        Value(56.78),
-        Value("hello"),
-        Value("hello" * 2**10),
-        Value(b"world"),
-        Value(b"world" * 2**10),
+        1234,
+        2**12,
+        56.78,
+        "hello",
+        "hello" * 2**10,
+        b"world",
+        b"world" * 2**10,
     ]
 
     for key, value in enumerate(values):
@@ -305,13 +307,13 @@ def test_getsetdel(store) -> None:
 def test_getsetdel_memory() -> None:
     store = DiskStore(":memory:")
     values = [
-        Value(1234),
-        Value(2**12),
-        Value(56.78),
-        Value("hello"),
-        Value("hello" * 2**10),
-        Value(b"world"),
-        Value(b"world" * 2**10),
+        1234,
+        2**12,
+        56.78,
+        "hello",
+        "hello" * 2**10,
+        b"world",
+        b"world" * 2**10,
     ]
 
     for key, value in enumerate(values):
@@ -332,10 +334,10 @@ def test_getsetdel_memory() -> None:
 
 def test_value(store) -> None:
     values = {
-        "i": Value(1234),
-        "f": Value(56.78),
-        "s": Value("hello"),
-        "b": Value(b"world"),
+        "i": 1234,
+        "f": 56.78,
+        "s": "hello",
+        "b": b"world",
     }
 
     store.update(values)
@@ -345,26 +347,19 @@ def test_value(store) -> None:
     assert float(store["f"]) == 56.78
     assert bytes(store["b"]) == b"world"
     assert str(store["s"]) == "hello"
-    assert repr(store["s"]) == "Value(value='hello')"
+    assert repr(store["s"]) == "'hello'"
     assert str(store["b"]) == "b'world'"
-
-    with pytest.raises(ValueError):
-        int(store["f"])
-    with pytest.raises(ValueError):
-        float(store["i"])
-    with pytest.raises(ValueError):
-        bytes(store["s"])
 
 
 def test_get_readonly_instance(store) -> None:
     values = [
-        Value(1234),
-        Value(2**12),
-        Value(56.78),
-        Value("hello"),
-        Value("hello" * 2**10),
-        Value(b"world"),
-        Value(b"world" * 2**10),
+        1234,
+        2**12,
+        56.78,
+        "hello",
+        "hello" * 2**10,
+        b"world",
+        b"world" * 2**10,
     ]
 
     store.update(enumerate(values))
@@ -378,11 +373,11 @@ def test_get_readonly_instance(store) -> None:
 
 def test_update_with_itearble(store):
     values = [
-        (1234, Value("numbers")),
-        (200, Value(False)),
-        (56.78, Value(False)),
-        ("hello", Value(False)),
-        (b"world", Value(False)),
+        (1234, "numbers"),
+        (200, False),
+        (56.78, False),
+        ("hello", False),
+        (b"world", False),
     ]
 
     store.update(values)
@@ -393,11 +388,11 @@ def test_update_with_itearble(store):
 
 def test_update_with_dict(store) -> None:
     values = {
-        1234: Value("numbers"),
-        200: Value(False),
-        56.78: Value(False),
-        "hello": Value(False),
-        b"world": Value(False),
+        1234: "numbers",
+        200: False,
+        56.78: False,
+        "hello": False,
+        b"world": False,
     }
 
     store.update(values)
@@ -410,11 +405,11 @@ def test_update_with_keys(store) -> None:
     class MyData:
         def __init__(self):
             self.values = {
-                1234: Value("numbers"),
-                200: Value(False),
-                56.78: Value(False),
-                "hello": Value(False),
-                b"world": Value(False),
+                1234: "numbers",
+                200: False,
+                56.78: False,
+                "hello": False,
+                b"world": False,
             }
 
         def keys(self):
@@ -431,7 +426,7 @@ def test_update_with_keys(store) -> None:
 
 
 def test_update_with_kv(store):
-    values = {"hello": Value("hello"), "world": Value(False), "some-key": Value("some")}
+    values = {"hello": "hello", "world": False, "some-key": "some"}
 
     store.update(**values)
 
@@ -440,11 +435,11 @@ def test_update_with_kv(store):
 
 
 def test_update_with_kv_direct(store):
-    store.update(hello=Value("World"), world=Value(False), some_thing=Value(True))
+    store.update(hello="World", world=False, some_thing=True)
 
-    assert store["hello"] == Value("World")
-    assert store["world"] == Value(False)
-    assert store["some_thing"] == Value(True)
+    assert store["hello"] == "World"
+    assert store["world"] == False
+    assert store["some_thing"] == True
 
 
 def test_update_from_other_diskstore(tmpdir) -> None:
@@ -452,8 +447,12 @@ def test_update_from_other_diskstore(tmpdir) -> None:
         name: str
         timestamp: float = time.time()
 
-    base = DiskStore(os.path.join(tmpdir, "base.db"), value_class=MyData)
-    other = DiskStore(os.path.join(tmpdir, "other.db"), value_class=MyData)
+    base = DiskStore(
+        os.path.join(tmpdir, "base.db"), NamedTupleConfig(value_class=MyData)
+    )
+    other = DiskStore(
+        os.path.join(tmpdir, "other.db"), NamedTupleConfig(value_class=MyData)
+    )
     values = []
     for i in range(10):
         value = MyData(f"my number {i}")
@@ -470,15 +469,15 @@ def test_update_from_other_diskstore(tmpdir) -> None:
 
 def test_update_with_dict_interesting_data(store) -> None:
     values = {
-        "hello my world": Value(False),
-        "hello\nmy world": Value(False),
-        "helloäüö": Value(False),
-        "select * from Value;": Value(False),
-        "s": Value("select * from Value;"),
-        "d": Value("delete from Value;"),
-        b"hello world": Value(False),
-        b"0": Value(b"\0"),
-        b"\0": Value(b"0"),
+        "hello my world": False,
+        "hello\nmy world": False,
+        "helloäüö": False,
+        "select * from Value;": False,
+        "s": "select * from Value;",
+        "d": "delete from Value;",
+        b"hello world": False,
+        b"0": b"\0",
+        b"\0": b"0",
     }
 
     store.update(values)
@@ -493,7 +492,7 @@ def test_ds_with_key(tmpfilename) -> None:
         name: str
         timestamp: float = time.time()
 
-    base = DiskStore(tmpfilename, value_class=MyData)
+    base = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyData))
     values = []
     for i in range(10):
         value = MyData(i, f"my number {i}")
@@ -509,55 +508,54 @@ def test_get_keyerror1(store) -> None:
 
 
 def test_setitem(store) -> None:
-    store[0] = Value(0)
-    assert store[0] == Value(0)
-    store[0] = Value(1)
+    store[0] = 0
+    assert store[0] == 0
+    store[0] = 1
 
-    assert store[0] == Value(1)
+    assert store[0] == 1
     # with pytest.raises(ValueError):
     #     store[1] = "mystring"
 
 
 def test_getitem(store) -> None:
-    store[0] = Value(0)
-    assert store[0] == Value(0)
-    assert store[0] == (0,)
+    store[0] = 0
+    assert store[0] == 0
 
 
 def test_set_twice(store) -> None:
     large_value = b"abcd" * 2**10
 
-    store[0] = Value(0)
-    store[0] = Value(1)
+    store[0] = 0
+    store[0] = 1
 
-    assert store[0] == Value(1)
+    assert store[0] == 1
 
-    store[0] = Value(large_value)
+    store[0] = large_value
 
-    assert store[0] == Value(large_value)
+    assert store[0] == large_value
 
-    store[0] = Value(2)
+    store[0] = 2
 
-    assert store[0] == Value(2)
+    assert store[0] == 2
 
     assert not store.check()
 
 
 def test_setdefault(store) -> None:
-    store[0] = Value("zero")
-    value = store.setdefault(0, Value(0))
-    assert value == Value("zero")
+    store[0] = "zero"
+    value = store.setdefault(0, 0)
+    assert value == "zero"
 
-    value = store.setdefault(1, Value("one"))
-    assert value == Value("one")
+    value = store.setdefault(1, "one")
+    assert value == "one"
 
     value = store.setdefault(2, None)
     assert value is None
 
 
 def test_store_bytes(store) -> None:
-    store[0] = Value(b"abcd")
-    assert store[0] == Value(b"abcd")
+    store[0] = b"abcd"
+    assert store[0] == b"abcd"
 
 
 def test_store_other_class(tmpfilename) -> None:
@@ -568,7 +566,7 @@ def test_store_other_class(tmpfilename) -> None:
         v4: bytes
 
     value = MyValue("one", 1, 1.1, b"100")
-    store = ds.DiskStore(tmpfilename, value_class=MyValue)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
     store["one"] = value
     assert store["one"] == value
     store.close()
@@ -578,7 +576,7 @@ def test_store_collections_namedtuple(tmpfilename) -> None:
     MyValue = namedtuple("MyValue", ["v1", "v2"])
 
     value = MyValue("one", 1)
-    store = ds.DiskStore(tmpfilename, value_class=MyValue)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
     store["one"] = value
     assert store["one"] == value
     store.close()
@@ -598,7 +596,7 @@ def test_custom_json_value_class(tmpfilename) -> None:
 
     data_dict = {"a": 1, "b": 2}
     value = MyJson.create(data_dict)
-    store = ds.DiskStore(tmpfilename, value_class=MyJson)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJson))
     store["one"] = value
     assert store["one"] == value
     assert store["one"].decode() == data_dict
@@ -622,7 +620,7 @@ def test_address_value_class() -> None:
         plz=77777,
         city="Bonn",
     )
-    store = ds.DiskStore("", value_class=Address)
+    store = ds.DiskStore("", NamedTupleConfig(value_class=Address))
     store[value.id] = value
     assert store[value.id] == value
     store.close()
@@ -657,7 +655,7 @@ def test_dataclass(tmpfilename) -> None:
         plz=77777,
         city="Bonn",
     )
-    store = ds.DiskStore(tmpfilename, value_class=Address)
+    store = ds.DiskStore(tmpfilename, DataclassConfig(dataclass=Address))
     store[value.id] = value
     # store[value.id] = astuple(value)
     result = store[value.id]
@@ -691,7 +689,7 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     data = {"a": 1, "b": 2}
     value = MyPickle.create(data)
     creation_time = value.creation_time
-    store = ds.DiskStore(tmpfilename, value_class=MyPickle)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyPickle))
     store["one"] = value
     assert store["one"] == value
     assert type(store["one"].data) == bytes
@@ -702,7 +700,7 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     store.close()
 
 
-def test_custom_value_class_json(tmpfilename) -> None:
+def test_custom_value_class_nt_json(tmpfilename) -> None:
 
     @dataclass
     class MyData:
@@ -720,7 +718,7 @@ def test_custom_value_class_json(tmpfilename) -> None:
 
     timestamp = time.time()
     datac = MyData(1, 2, timestamp)
-    store = ds.DiskStore(tmpfilename, value_class=MyData)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyData))
     store["one"] = datac
     result = store["one"]
     assert result == datac
@@ -730,7 +728,7 @@ def test_custom_value_class_json(tmpfilename) -> None:
     store.close()
 
 
-def test_custom_value_class_jsonb(tmpfilename) -> None:
+def test_custom_value_class_nt_jsonb(tmpfilename) -> None:
     from apsw import jsonb_decode, jsonb_encode
 
     @dataclass
@@ -765,7 +763,7 @@ def test_custom_value_class_jsonb(tmpfilename) -> None:
     datac = MyData(1, 2, time.time())
     value = MyJsonB.create(datac)
     creation_time = value.creation_time
-    store = ds.DiskStore(tmpfilename, value_class=MyJsonB)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJsonB))
     store["one"] = value
     assert store["one"] == value
     assert type(store["one"].data) == bytes
@@ -786,45 +784,45 @@ def test_get(store) -> None:
 
 
 def test_query_all(store) -> None:
-    store["one"] = Value(1)
+    store["one"] = 1
     result = list(store.query())
-    assert result == [("one", Value(1))]
+    assert result == [("one", 1)]
 
 
 def test_query_one_key(store) -> None:
-    store["one"] = Value(1)
+    store["one"] = 1
     result = list(store.query(where="_key=?", parameters=("one",)))
-    assert result == [("one", Value(1))]
+    assert result == [("one", 1)]
 
 
 def test_query_one_value(store) -> None:
-    store["one"] = Value(1)
+    store["one"] = 1
     result = list(store.query(where="value=?", parameters=(1,)))
-    assert result == [("one", Value(1))]
+    assert result == [("one", 1)]
 
 
 def test_query_value(store) -> None:
     for i in range(1, 10):
-        store[f"order#{i}"] = Value(i)
+        store[f"order#{i}"] = i
     result = list(store.query(where="value = 5"))
-    assert result == [("order#5", Value(5))]
+    assert result == [("order#5", 5)]
 
 
 def test_query_rowid(store) -> None:
     for i in range(1, 10):
-        store[f"order#{i}"] = Value(i)
+        store[f"order#{i}"] = i
     result = list(store.query(where="rowid = 5"))
-    assert result == [("order#5", Value(5))]
+    assert result == [("order#5", 5)]
 
 
 def test_query_multiple(store) -> None:
-    expected = [(b"order#1", Value("my data 1"))]
+    expected = [(b"order#1", "my data 1")]
     for i in range(1, 100):
         key = b"order#%d" % i
         value = f"my data {i}"
-        store[key] = Value(value)
+        store[key] = value
         if i >= 10 and i < 20:
-            expected.append((key, Value(value)))
+            expected.append((key, value))
 
     # result = list(store.query(where="_key LIKE 'order#1%'"))
     result = list(
@@ -834,19 +832,19 @@ def test_query_multiple(store) -> None:
 
 
 def test_query_big(store) -> None:
-    store.update(((f"order#{i}", Value(i)) for i in range(1, 10_000)))
+    store.update(((f"order#{i}", i) for i in range(1, 10_000)))
     t0 = time.time()
     result = list(store.query(where="value = 5000"))
     t1 = time.time()
     duration = t1 - t0
     print(f"duration: {duration}")
-    assert result == [("order#5000", Value(5000))]
+    assert result == [("order#5000", 5000)]
 
 
 def test_query_multiple_big(store) -> None:
     amount = 10_000
     expected = int(amount / 100)
-    store.update(((f"order#{i}", Value(i % 100)) for i in range(1, amount)))
+    store.update(((f"order#{i}", i % 100) for i in range(1, amount)))
     t0 = time.time()
     result = list(store.query(where="value = 50"))
     t1 = time.time()
@@ -859,10 +857,10 @@ def test_query_json_value(store) -> None:
     for i in range(1, 100):
         key = f"{i}"
         data = {"data": f"mydata {i}", "key": i}
-        value = Value(json.dumps(data))
+        value = json.dumps(data)
         store[key] = value
 
-    expected = Value(json.dumps({"data": "mydata 50", "key": 50}))
+    expected = json.dumps({"data": "mydata 50", "key": 50})
 
     result = list(store.query(where="value->>'$.key' = 50"))
     assert result
@@ -875,10 +873,10 @@ def test_query_jsonb_value(store) -> None:
     for i in range(1, 100):
         key = f"{i}"
         data = {"data": f"mydata {i}", "key": i}
-        value = Value(jsonb_encode(data))
+        value = jsonb_encode(data)
         store[key] = value
 
-    expected = Value(jsonb_encode({"data": "mydata 50", "key": 50}))
+    expected = jsonb_encode({"data": "mydata 50", "key": 50})
 
     result = list(store.query(where="value->>'$.key' = 50"))
     assert result
@@ -886,8 +884,8 @@ def test_query_jsonb_value(store) -> None:
 
 
 def test_pop(store) -> None:
-    store["alpha"] = Value(1)
-    assert store.pop("alpha") == Value(1)
+    store["alpha"] = 1
+    assert store.pop("alpha") == 1
     assert store.get("alpha") is None
     assert store.check() == []
 
@@ -896,18 +894,18 @@ def test_pop(store) -> None:
 
     assert store.pop("dne", None) is None
 
-    store["delta"] = Value(210)
+    store["delta"] = 210
 
-    store["epsilon"] = Value("0" * 2**10)
-    assert store.pop("epsilon") == Value("0" * 2**10)
+    store["epsilon"] = "0" * 2**10
+    assert store.pop("epsilon") == "0" * 2**10
 
     with pytest.raises(KeyError):
         store.pop("miss")
 
 
 def test_popitem(store) -> None:
-    store["alpha"] = Value(1)
-    assert store.popitem() == ("alpha", Value(1))
+    store["alpha"] = 1
+    assert store.popitem() == ("alpha", 1)
     assert store.get("alpha") is None
     assert store.check() == []
     with pytest.raises(KeyError):
@@ -915,7 +913,7 @@ def test_popitem(store) -> None:
 
 
 def test_del(store) -> None:
-    store[1] = Value("one")
+    store[1] = "one"
     del store[1]
     assert len(store) == 0
     with pytest.raises(KeyError):
@@ -928,7 +926,7 @@ def test_check(store) -> None:
     keys = (0, 1, 1234, 56.78, "hello", b"world")
 
     for key in keys:
-        store[key] = Value(blob)
+        store[key] = blob
 
     assert len(store.check()) == 0  # Should display no warnings.
 
@@ -938,14 +936,14 @@ def test_check_vacuum(store) -> None:
     keys = (0, 1, 1234, 56.78, "hello", b"world")
 
     for key in keys:
-        store[key] = Value(blob)
+        store[key] = blob
 
     assert len(store.check(vacuum=True)) == 0  # Should display no warnings.
 
 
 def test_integrity_check(store) -> None:
     for value in range(1000):
-        store[value] = Value(value)
+        store[value] = value
 
     store.close()
 
@@ -967,7 +965,7 @@ def test_integrity_check(store) -> None:
 def test_clear(store) -> None:
     num_items = 100
     for value in range(num_items):
-        store[value] = Value(value)
+        store[value] = value
     assert len(store) == num_items
     store.clear()
     assert len(store) == 0
@@ -975,45 +973,45 @@ def test_clear(store) -> None:
 
 
 def test_with(store) -> None:
-    with ds.DiskStore(store.filename, value_class=Value) as tmp:
-        tmp["a"] = Value(0)
-        tmp["b"] = Value(1)
+    with ds.DiskStore(store.filename) as tmp:
+        tmp["a"] = 0
+        tmp["b"] = 1
 
-    assert store["a"] == Value(0)
-    assert store["b"] == Value(1)
+    assert store["a"] == 0
+    assert store["b"] == 1
 
 
 def test_contains(store) -> None:
     assert 0 not in store
-    store[0] = Value(0)
+    store[0] = 0
     assert 0 in store
 
 
 def test_add(store) -> None:
-    assert store.add(1, Value(1)) == 1
-    assert store.get(1) == Value(1)
-    assert store.add(1, Value(2)) is None
-    assert store.get(1) == Value(1)
+    assert store.add(1, 1) == 1
+    assert store.get(1) == 1
+    assert store.add(1, 2) is None
+    assert store.get(1) == 1
     del store[1]
     assert store.check() == []
 
 
 def test_add_key_type_int(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, key_type=int) as store:
-        assert store.add(None, Value(0)) == 1
-        assert store.get(1) == Value(0)
-        assert store.add(1, Value(1)) is None
-        assert store.add(2, Value(2)) == 2
-        assert store.get(2) == Value(2)
+    with ds.DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
+        assert store.add(None, 0) == 1
+        assert store.get(1) == 0
+        assert store.add(1, 1) is None
+        assert store.add(2, 2) == 2
+        assert store.get(2) == 2
         del store[1]
         assert store.check() == []
 
 
 def test_add_large_value(store) -> None:
-    value = Value(b"abcd" * 2**10)
+    value = b"abcd" * 2**10
     assert store.add(b"test-key", value)
     assert store.get(b"test-key") == value
-    assert not store.add(b"test-key", Value(value.value * 2))
+    assert not store.add(b"test-key", value * 2)
     assert store.get(b"test-key") == value
     assert store.check() == []
 
@@ -1022,7 +1020,7 @@ def test_iter(store) -> None:
     sequence = list("abcdef")
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
+        store[value] = index
 
     iterator = iter(store)
 
@@ -1041,7 +1039,7 @@ def test_reversed(store) -> None:
     sequence = list("abcdef")
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
+        store[value] = index
 
     iterator = reversed(store)
 
@@ -1062,8 +1060,8 @@ def test_iteritems_with_query(store) -> None:
     comp_dict = {}
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
-        comp_dict[value] = Value(index)
+        store[value] = index
+        comp_dict[value] = index
 
     new_dict = dict(store.query())
 
@@ -1075,8 +1073,8 @@ def test_items(store) -> None:
     comp_dict = {}
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
-        comp_dict[value] = Value(index)
+        store[value] = index
+        comp_dict[value] = index
 
     new_dict = dict(store.items())
 
@@ -1088,8 +1086,8 @@ def test_values(store) -> None:
     comp_values = []
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
-        comp_values.append(Value(index))
+        store[value] = index
+        comp_values.append(index)
 
     new_values = list(store.values())
 
@@ -1100,7 +1098,7 @@ def test_keys(store) -> None:
     sequence = list("abcdef")
 
     for index, value in enumerate(sequence):
-        store[value] = Value(index)
+        store[value] = index
 
     new_keys = list(store.keys())
 
@@ -1109,7 +1107,7 @@ def test_keys(store) -> None:
 
 def test_pickle(store):
     for num, val in enumerate("abcde"):
-        store[val] = Value(num)
+        store[val] = num
 
     data = pickle.dumps(store)
     other = pickle.loads(data)
@@ -1164,11 +1162,11 @@ def test_key_roundtrip(store):
 
     for key in to_test:
         store.clear()
-        store[key] = Value(b"value")
+        store[key] = b"value"
         keys = list(store)
         assert len(keys) == 1
         store_key = keys[0]
-        assert store[key] == Value(b"value")
+        assert store[key] == b"value"
         # assert store[store_key] == {"example0": ["value0"]}
 
 
@@ -1177,10 +1175,10 @@ def test_copy() -> None:
 
     with ds.DiskStore(os.path.join(store_dir1, "diskstore.db")) as store1:
         for count in range(10):
-            store1[count] = Value(str(count))
+            store1[count] = str(count)
 
         for count in range(10, 20):
-            store1[count] = Value(str(count) * int(1e5))
+            store1[count] = str(count) * int(1e5)
 
     store_dir2 = tempfile.mkdtemp()
     shutil.rmtree(store_dir2)
@@ -1188,10 +1186,10 @@ def test_copy() -> None:
 
     with ds.DiskStore(os.path.join(store_dir2, "diskstore.db")) as store2:
         for count in range(10):
-            assert store2[count] == Value(str(count))
+            assert store2[count] == str(count)
 
         for count in range(10, 20):
-            assert store2[count] == Value(str(count) * int(1e5))
+            assert store2[count] == str(count) * int(1e5)
 
     shutil.rmtree(store_dir1, ignore_errors=True)
     shutil.rmtree(store_dir2, ignore_errors=True)
@@ -1202,10 +1200,10 @@ def test_differnt_threads(store) -> None:
 
     def thread_run(number):
         assert store.get(number, None) is None
-        store[number] = Value(f"{number}")
+        store[number] = f"{number}"
         del store[number]
-        store[number] = Value(f"{number}")
-        results[number] = Value(f"{number}")
+        store[number] = f"{number}"
+        results[number] = f"{number}"
 
     threads = []
 
@@ -1218,33 +1216,33 @@ def test_differnt_threads(store) -> None:
         thread.join()
 
     for key, value in results.items():
-        assert Value(str(key)) == value
+        assert str(key) == value
 
 
 def test_transact(store):
     values = [
-        Value(1234),
-        Value(56.78),
-        Value("hello"),
-        Value(b"world"),
+        1234,
+        56.78,
+        "hello",
+        b"world",
     ]
 
     with store.transact() as cx:
         store.update(enumerate(values))
-        store[10] = Value(10)
-        assert store[10] == Value(10)
-        assert store[0] == Value(1234)
+        store[10] = 10
+        assert store[10] == 10
+        assert store[0] == 1234
 
     for key, value in enumerate(values):
         assert store[key] == value
 
-    assert store[10] == Value(10)
+    assert store[10] == 10
 
 
 def test_transact_rollback(store):
     with pytest.raises(ValueError):  # noqa: PT011, PT012
         with store.transact():
-            store[10] = Value(10)
+            store[10] = 10
             raise ValueError("TEST")
 
     assert 10 not in store
@@ -1254,7 +1252,7 @@ def test_transact_twice_rollback(store):
     with pytest.raises(ValueError):  # noqa: PT011, PT012
         with store.transact():
             with store.transact():
-                store[10] = Value(10)
+                store[10] = 10
                 raise ValueError("TEST")
 
     assert 10 not in store
@@ -1262,32 +1260,32 @@ def test_transact_twice_rollback(store):
 
 def test_timeout(tmpfilename):
     values = [
-        Value(1234),
-        Value(56.78),
-        Value("hello"),
-        Value(b"world"),
+        1234,
+        56.78,
+        "hello",
+        b"world",
     ]
 
-    store = DiskStore(tmpfilename, value_class=Value, timeout=0.1)
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.1))
 
     with store.transact() as cx:
         store.update(enumerate(values))
-        store[10] = Value(10)
+        store[10] = 10
 
     for key, value in enumerate(values):
         assert store[key] == value
 
-    assert store[10] == Value(10)
+    assert store[10] == 10
 
     store.close()
 
 
 def test_busy(tmpfilename):
-    store = DiskStore(tmpfilename, value_class=Value, timeout=0.001)
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.001))
 
     def thread_run():
         with store.transact(retry=False):
-            store[1] = Value("2")
+            store[1] = "2"
             time.sleep(0.1)
 
     thread = threading.Thread(target=thread_run)
@@ -1296,18 +1294,18 @@ def test_busy(tmpfilename):
     time.sleep(0.03)
     with pytest.raises(BusyError):  # noqa: PT012
         with store.transact(retry=False):
-            store[1] = Value("1")
+            store[1] = "1"
 
     thread.join()
     store.close()
 
 
 def test_busy_retry(tmpfilename):
-    store = DiskStore(tmpfilename, value_class=Value, timeout=0.01)
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.01))
 
     def thread_run():
         with store.transact(retry=False):
-            store[1] = Value("2")
+            store[1] = "2"
             time.sleep(0.03)
 
     thread = threading.Thread(target=thread_run)
@@ -1315,7 +1313,7 @@ def test_busy_retry(tmpfilename):
 
     time.sleep(0.02)
     with store.transact(retry=True):
-        store[1] = Value("1")
+        store[1] = "1"
 
     thread.join()
     store.close()

@@ -135,7 +135,7 @@ def worker(num, kind, args, kwargs):
             action = "get"
         elif choice < 0.990:
             start = time.time()
-            result = obj[key] = diskstore.Value(value)
+            result = obj[key] = value
             end = time.time()
             miss = result is False
             action = "set"
@@ -190,7 +190,7 @@ def dispatch():
 
         for key in range(RANGE):
             key = str(key).encode("utf-8")
-            obj[key] = diskstore.Value(key)
+            obj[key] = key
 
         try:
             obj.close()

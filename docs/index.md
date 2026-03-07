@@ -43,8 +43,8 @@ Example:
 
 from diskstore import DiskStore, Value
 
-ds = DiskStore("/tmp/diskstore.db", value_class=Value)
-ds["key"] = Value("my value")
+ds = DiskStore("/tmp/diskstore.db")
+ds["key"] = "my value"
 print(ds["key"])
 
 ```

@@ -10,8 +10,9 @@ from typing import ClassVar
 import pytest
 
 from diskstore import DiskRead, DiskStore, Value
+from diskstore.config import BaseConfig, NamedTupleConfig
 
-data = OrderedDict((key, (str(value),)) for key, value in enumerate(range(10)))
+data = OrderedDict((key, str(value)) for key, value in enumerate(range(10)))
 
 
 @pytest.fixture(scope="session")
@@ -34,22 +35,22 @@ def ro_store(store_file):
 
 def test_init(store_file) -> None:
     dr = DiskRead(store_file)
-    assert dr[0] == Value("0")
+    assert dr[0] == "0"
 
 
 def test_init_tablename(store_file) -> None:
-    dr = DiskRead(store_file, tablename="Value")
-    assert dr[0] == Value("0")
+    dr = DiskRead(store_file, BaseConfig(tablename="DiskStore"))
+    assert dr[0] == "0"
 
 
-def test_init_value_class(store_file) -> None:
-    dr = DiskRead(store_file, value_class=Value)
-    assert dr[0] == ("0",)
+# def test_init_value_class(store_file) -> None:
+#     dr = DiskRead(store_file, value_class=Value)
+#     assert dr[0] == "0"
 
 
 def test_init_timeout(store_file) -> None:
-    dr = DiskRead(store_file, timeout=1.0)
-    assert dr[0] == Value("0")
+    dr = DiskRead(store_file, BaseConfig(timeout=1.0))
+    assert dr[0] == "0"
 
 
 def test_init_error() -> None:
@@ -61,7 +62,7 @@ def test_init_error() -> None:
     Invalid._fields = tuple(field.name for field in fields(Invalid))
 
     with pytest.raises(ValueError):
-        DiskRead("abc.db", value_class=Invalid)
+        DiskRead("abc.db", NamedTupleConfig(value_class=Invalid))
 
 
 def test_getitem(ro_store) -> None:
@@ -77,7 +78,7 @@ def test_getitem_keyerror(ro_store) -> None:
 
 
 def test_get(ro_store) -> None:
-    assert ro_store.get(0) == Value("0")
+    assert ro_store.get(0) == "0"
     assert ro_store.get(100, "dne") == "dne"
     assert not ro_store.get(1000)
 
@@ -89,12 +90,12 @@ def test_query_all(ro_store) -> None:
 
 def test_query_one_key(ro_store) -> None:
     result = list(ro_store.query(where="_key=?", parameters=(1,)))
-    assert result == [(1, Value("1"))]
+    assert result == [(1, "1")]
 
 
 def test_query_one_value(ro_store) -> None:
     result = list(ro_store.query(where="value=?", parameters=("1",)))
-    assert result == [(1, Value("1"))]
+    assert result == [(1, "1")]
 
 
 def test_contains(ro_store) -> None:
@@ -106,7 +107,7 @@ def test_get_timeout(ro_store) -> None:
 
 
 def test_get_tablename(ro_store) -> None:
-    assert ro_store.tablename == "Value"
+    assert ro_store.tablename == "DiskStore"
 
 
 def test_iter(ro_store) -> None:

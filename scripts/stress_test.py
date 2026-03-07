@@ -13,7 +13,7 @@ import time
 import warnings
 from contextlib import suppress
 
-from diskstore import DiskStore, Value
+from diskstore import DiskStore, Value, config
 
 OPERATIONS = int(1e4)
 GET_AVERAGE = 100
@@ -126,7 +126,7 @@ def worker(queue, processes, threads):
     # filename = "/tmp/diskstore_stress_test.db"
     # with suppress(FileNotFoundError):
     #     os.remove(filename)
-    cache = DiskStore(filename, timeout=10)
+    cache = DiskStore(filename, config.NamedTupleConfig(timeout=10))
 
     for index, (action, key, value) in enumerate(iter(queue.get, None)):
         start = time.time()

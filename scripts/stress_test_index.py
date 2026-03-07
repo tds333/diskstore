@@ -5,8 +5,10 @@ import itertools as it
 import os
 import random
 from contextlib import suppress
+from this import s
 
 import diskstore as ds
+from diskstore.config import NamedTupleConfig
 
 KEYS = 1000
 OPERATIONS = 250000
@@ -102,7 +104,7 @@ def test():
     filename = "/tmp/diskstore_stress_test_index.db"
     with suppress(FileNotFoundError):
         os.remove(filename)
-    index = ds.DiskStore(filename)
+    index = ds.DiskStore(filename, NamedTupleConfig())
     index.update(mapping)
     assert mapping == index
     stress(mapping, index)

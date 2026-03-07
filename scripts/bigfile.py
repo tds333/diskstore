@@ -1,7 +1,8 @@
 from time import time
 from typing import NamedTuple
 
-from diskstore import DiskStore, Value
+from diskstore import DiskStore, Value, config
+from diskstore.config import NamedTupleConfig
 
 
 class LotColumns(NamedTuple):
@@ -20,8 +21,8 @@ class LotColumns(NamedTuple):
 def main():
     amount = 1_000_000
     ds = DiskStore("/tmp/bigfile.db")
-    ds2 = DiskStore("/tmp/bigfile2.db", value_class=LotColumns)
-    ds3 = DiskStore("/tmp/bigfile.db", tablename="Second")
+    ds2 = DiskStore("/tmp/bigfile2.db", config.NamedTupleConfig(value_class=LotColumns))
+    ds3 = DiskStore("/tmp/bigfile.db", config.NamedTupleConfig(tablename="Second"))
 
     ds.clear()
     ds.check(vacuum=True)
@@ -58,7 +59,7 @@ def main():
 
 def main_find():
     amount = 1_000_000
-    ds = DiskStore("/tmp/bigfile2.db", value_class=LotColumns)
+    ds = DiskStore("/tmp/bigfile2.db", NamedTupleConfig(value_class=LotColumns))
     if len(ds) != amount:
         ds.clear()
         ds.check(vacuum=True)
