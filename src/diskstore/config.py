@@ -43,7 +43,8 @@ class ConfigProtocol(Protocol):
 
     @abstractmethod
     def dump_value(self, value: Any) -> Iterable:
-        """Called with the value, should return an Iterable which is used to write to the DB."""
+        """Called with the value, should return an Iterable
+        which is used to write to the DB."""
 
     @abstractmethod
     def load_data(self, data: tuple) -> Any:
@@ -186,7 +187,7 @@ class DataclassConfig(BaseConfig):
         if dataclasses.is_dataclass(dataclass):
             value_columns = tuple(field.name for field in dataclasses.fields(dataclass))
         else:
-            raise ValueError(f"It is not a dataclass.")
+            raise ValueError("It is not a dataclass.")
         if "_key" in value_columns:
             raise ValueError("Name _key is not allowed as attribute for dataclass.")
 

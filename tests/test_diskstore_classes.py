@@ -9,13 +9,13 @@ from dataclasses import asdict, dataclass, fields
 from decimal import Decimal
 from typing import ClassVar, NamedTuple, Optional
 
-import msgspec.json
 import pytest
 
 msgspec = pytest.importorskip("msgspec")
 pydantic = pytest.importorskip("pydantic")
 
 import msgspec
+import msgspec.json
 import pydantic
 
 from diskstore import DiskStore

@@ -14,7 +14,7 @@ import os.path
 import threading
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from contextlib import closing, contextmanager
-from typing import Generator, NamedTuple, Optional, Sequence, TypeAlias, Union
+from typing import Generator, Optional, Sequence, TypeAlias, Union
 
 import apsw
 
