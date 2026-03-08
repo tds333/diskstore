@@ -2,9 +2,10 @@
 
 import json
 import os.path
+import shutil
 import tempfile
 import uuid
-from dataclasses import asdict, astuple, dataclass, fields
+from dataclasses import asdict, dataclass, fields
 from decimal import Decimal
 from typing import ClassVar, NamedTuple, Optional
 
@@ -55,7 +56,7 @@ class PydanticConfig(BaseConfig):
 def tmpdir():
     directory = tempfile.mkdtemp(prefix="diskstore-")
     yield directory
-    # shutil.rmtree(directory, ignore_errors=True)
+    shutil.rmtree(directory, ignore_errors=True)
 
 
 @pytest.fixture
