@@ -13,7 +13,7 @@ import time
 import warnings
 from contextlib import suppress
 
-from diskstore import DiskStore, Value, config
+from diskstore import DiskStore, config
 
 OPERATIONS = int(1e4)
 GET_AVERAGE = 100
@@ -126,14 +126,14 @@ def worker(queue, processes, threads):
     # filename = "/tmp/diskstore_stress_test.db"
     # with suppress(FileNotFoundError):
     #     os.remove(filename)
-    cache = DiskStore(filename, config.NamedTupleConfig(timeout=10))
+    cache = DiskStore(filename, config.BaseConfig(timeout=10))
 
     for index, (action, key, value) in enumerate(iter(queue.get, None)):
         start = time.time()
 
         try:
             if action == "set":
-                cache[key] = Value(value)
+                cache[key] = value
             elif action == "get":
                 result = cache[key]
             else:
@@ -147,7 +147,7 @@ def worker(queue, processes, threads):
         stop = time.time()
 
         if action == "get" and processes == 1 and threads == 1:
-            assert result.value == value
+            assert result == value
 
         if index > WARMUP:
             delta = stop - start

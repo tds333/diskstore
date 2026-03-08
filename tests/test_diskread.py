@@ -9,7 +9,7 @@ from typing import ClassVar
 
 import pytest
 
-from diskstore import DiskRead, DiskStore, Value
+from diskstore import DiskRead, DiskStore
 from diskstore.config import BaseConfig, NamedTupleConfig
 
 data = OrderedDict((key, str(value)) for key, value in enumerate(range(10)))

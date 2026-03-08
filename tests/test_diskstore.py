@@ -18,9 +18,14 @@ from unittest import mock
 
 import pytest
 
-import diskstore as ds
-from diskstore import DiskStore, Value
-from diskstore.config import BaseConfig, DataclassConfig, JsonConfig, NamedTupleConfig
+from diskstore import DiskStore
+from diskstore.config import (
+    BaseConfig,
+    DataclassConfig,
+    JsonConfig,
+    NamedTupleConfig,
+)
+from diskstore.const import DEFAULT_PRAGMAS
 from diskstore.diskstore import BusyError
 
 
@@ -39,7 +44,7 @@ def tmpfilename(tmpdir):
 
 @pytest.fixture
 def store(tmpfilename):
-    with ds.DiskStore(tmpfilename) as store:
+    with DiskStore(tmpfilename) as store:
         yield store
     store.close()
     # if store.filename and store.filename != ":memory:":
@@ -47,19 +52,19 @@ def store(tmpfilename):
 
 
 def test_init(tmpfilename) -> None:
-    store = ds.DiskStore(tmpfilename)
+    store = DiskStore(tmpfilename)
     assert store.check() == []
     store.close()
 
 
 def test_init_tablename(tmpfilename) -> None:
-    store = ds.DiskStore(tmpfilename, BaseConfig(tablename="other table 1"))
+    store = DiskStore(tmpfilename, BaseConfig(tablename="other table 1"))
     assert store.check() == []
     store.close()
 
 
 def test_init_tablename_escape(tmpfilename) -> None:
-    store = ds.DiskStore(tmpfilename, BaseConfig(tablename='other "table" 1'))
+    store = DiskStore(tmpfilename, BaseConfig(tablename='other "table" 1'))
     store[0] = 0
     assert store.check() == []
     store.close()
@@ -67,7 +72,7 @@ def test_init_tablename_escape(tmpfilename) -> None:
 
 def test_init_filename(tmpfilename):
     path = pathlib.Path(tmpfilename)
-    store = ds.DiskStore(path)
+    store = DiskStore(path)
     assert os.path.exists(store.filename)
 
 
@@ -204,7 +209,7 @@ def test_migrate_table_on_old(tmpfilename) -> None:
 
 
 def test_binary(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename) as store:
+    with DiskStore(tmpfilename) as store:
         values = [b"string"]
 
         for key, value in enumerate(values):
@@ -215,7 +220,7 @@ def test_binary(tmpfilename) -> None:
 
 
 def test_key_type_int(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
+    with DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
         store[0] = "0"
         store["1"] = "1"
         # special, integer primary key is rowid and NULL values get
@@ -234,7 +239,7 @@ def test_key_type_int(tmpfilename) -> None:
 
 
 def test_key_type_str(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, BaseConfig(key_type=str)) as store:
+    with DiskStore(tmpfilename, BaseConfig(key_type=str)) as store:
         store["1"] = "1"
         assert store["1"] == "1"
         store[1] = "2"
@@ -242,7 +247,7 @@ def test_key_type_str(tmpfilename) -> None:
 
 
 def test_key_type_float(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, BaseConfig(key_type=float)) as store:
+    with DiskStore(tmpfilename, BaseConfig(key_type=float)) as store:
         store[0.0] = "0"
         store["1.0"] = "1"
         assert store[0] == "0"
@@ -252,7 +257,7 @@ def test_key_type_float(tmpfilename) -> None:
 
 
 def test_key_type_blob(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename) as store:
+    with DiskStore(tmpfilename) as store:
         store["1"] = "1"
         assert store["1"] == "1"
         store[1] = "2"
@@ -566,7 +571,7 @@ def test_store_other_class(tmpfilename) -> None:
         v4: bytes
 
     value = MyValue("one", 1, 1.1, b"100")
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
     store["one"] = value
     assert store["one"] == value
     store.close()
@@ -576,7 +581,7 @@ def test_store_collections_namedtuple(tmpfilename) -> None:
     MyValue = namedtuple("MyValue", ["v1", "v2"])
 
     value = MyValue("one", 1)
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyValue))
     store["one"] = value
     assert store["one"] == value
     store.close()
@@ -596,7 +601,7 @@ def test_custom_json_value_class(tmpfilename) -> None:
 
     data_dict = {"a": 1, "b": 2}
     value = MyJson.create(data_dict)
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJson))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJson))
     store["one"] = value
     assert store["one"] == value
     assert store["one"].decode() == data_dict
@@ -620,7 +625,7 @@ def test_address_value_class() -> None:
         plz=77777,
         city="Bonn",
     )
-    store = ds.DiskStore("", NamedTupleConfig(value_class=Address))
+    store = DiskStore("", NamedTupleConfig(value_class=Address))
     store[value.id] = value
     assert store[value.id] == value
     store.close()
@@ -655,7 +660,7 @@ def test_dataclass(tmpfilename) -> None:
         plz=77777,
         city="Bonn",
     )
-    store = ds.DiskStore(tmpfilename, DataclassConfig(dataclass=Address))
+    store = DiskStore(tmpfilename, DataclassConfig(dataclass=Address))
     store[value.id] = value
     # store[value.id] = astuple(value)
     result = store[value.id]
@@ -689,7 +694,7 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     data = {"a": 1, "b": 2}
     value = MyPickle.create(data)
     creation_time = value.creation_time
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyPickle))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyPickle))
     store["one"] = value
     assert store["one"] == value
     assert type(store["one"].data) == bytes
@@ -718,7 +723,7 @@ def test_custom_value_class_nt_json(tmpfilename) -> None:
 
     timestamp = time.time()
     datac = MyData(1, 2, timestamp)
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyData))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyData))
     store["one"] = datac
     result = store["one"]
     assert result == datac
@@ -763,7 +768,7 @@ def test_custom_value_class_nt_jsonb(tmpfilename) -> None:
     datac = MyData(1, 2, time.time())
     value = MyJsonB.create(datac)
     creation_time = value.creation_time
-    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJsonB))
+    store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJsonB))
     store["one"] = value
     assert store["one"] == value
     assert type(store["one"].data) == bytes
@@ -951,7 +956,7 @@ def test_integrity_check(store) -> None:
         writer.seek(52)
         writer.write(b"\x00\x01")  # Should be 0, change it.
 
-    store = ds.DiskStore(store.filename)
+    store = DiskStore(store.filename)
 
     warns = store.check(vacuum=True)
 
@@ -973,7 +978,7 @@ def test_clear(store) -> None:
 
 
 def test_with(store) -> None:
-    with ds.DiskStore(store.filename) as tmp:
+    with DiskStore(store.filename) as tmp:
         tmp["a"] = 0
         tmp["b"] = 1
 
@@ -997,7 +1002,7 @@ def test_add(store) -> None:
 
 
 def test_add_key_type_int(tmpfilename) -> None:
-    with ds.DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
+    with DiskStore(tmpfilename, BaseConfig(key_type=int)) as store:
         assert store.add(None, 0) == 1
         assert store.get(1) == 0
         assert store.add(1, 1) is None
@@ -1122,7 +1127,7 @@ def test_pragmas(store) -> None:
     def compare_pragmas():
         valid = True
 
-        for key, value in ds.DEFAULT_PRAGMAS.items():
+        for key, value in DEFAULT_PRAGMAS.items():
             if not key.startswith("sqlite_"):
                 continue
 
@@ -1173,7 +1178,7 @@ def test_key_roundtrip(store):
 def test_copy() -> None:
     store_dir1 = tempfile.mkdtemp()
 
-    with ds.DiskStore(os.path.join(store_dir1, "diskstore.db")) as store1:
+    with DiskStore(os.path.join(store_dir1, "diskstore.db")) as store1:
         for count in range(10):
             store1[count] = str(count)
 
@@ -1184,7 +1189,7 @@ def test_copy() -> None:
     shutil.rmtree(store_dir2)
     shutil.copytree(store_dir1, store_dir2)
 
-    with ds.DiskStore(os.path.join(store_dir2, "diskstore.db")) as store2:
+    with DiskStore(os.path.join(store_dir2, "diskstore.db")) as store2:
         for count in range(10):
             assert store2[count] == str(count)
 

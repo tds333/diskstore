@@ -5,6 +5,6 @@
 
 ::: diskstore.diskread
 
-::: diskstore.diskcache
-
 ::: diskstore.const
+
+::: diskstore.config

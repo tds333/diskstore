@@ -28,34 +28,34 @@ Cursor = apsw.Cursor
 BasicType: TypeAlias = Union[bytes, str, int, float]
 
 
-class Value(NamedTuple):
-    """Basic NamedTuple Value class.
+# class Value(NamedTuple):
+#     """Basic NamedTuple Value class.
 
-    Usable to create key value mappings.
-    """
+#     Usable to create key value mappings.
+#     """
 
-    value: BasicType
+#     value: BasicType
 
-    def __float__(self):
-        data = self[0]
-        if isinstance(data, float):
-            return data
-        raise ValueError("Internal value is not an instance of float.")
+#     def __float__(self):
+#         data = self[0]
+#         if isinstance(data, float):
+#             return data
+#         raise ValueError("Internal value is not an instance of float.")
 
-    def __int__(self):
-        data = self[0]
-        if isinstance(data, int):
-            return data
-        raise ValueError("Internal value is not an instance of int.")
+#     def __int__(self):
+#         data = self[0]
+#         if isinstance(data, int):
+#             return data
+#         raise ValueError("Internal value is not an instance of int.")
 
-    def __bytes__(self):
-        data = self[0]
-        if isinstance(data, bytes):
-            return data
-        raise ValueError("Internal value is not an instance of bytes.")
+#     def __bytes__(self):
+#         data = self[0]
+#         if isinstance(data, bytes):
+#             return data
+#         raise ValueError("Internal value is not an instance of bytes.")
 
-    def __str__(self):
-        return str(self[0])
+#     def __str__(self):
+#         return str(self[0])
 
 
 class DiskKeysView(KeysView):
@@ -114,14 +114,14 @@ class DiskRead(Mapping):
             if (self._config.timeout is None or self._config.timeout < 0.0)
             else float(self._config.timeout)
         )
-        self._load = self._config.load
-        self._dump = self._config.dump
+        self._load_data = self._config.load_data
         self._local = threading.local()
 
         # precreated statements based on tablename and value_class
         tablename = self._escape_name(self._config.tablename)
-        value_columns = self._config.fields
-        fields = ", ".join(f"{field}" for field in value_columns)
+        fields = ", ".join(
+            f"{DiskRead._escape_name(field)}" for field, *_ in self._config.fields
+        )
         self._statements: dict[str, str] = {
             "GET": f"SELECT {fields} FROM {tablename} WHERE _key = ? LIMIT 1",
             "CONTAINS": f"SELECT _key FROM {tablename} WHERE _key = ? LIMIT 1",
@@ -189,7 +189,7 @@ class DiskRead(Mapping):
         if row is MISSING:
             raise KeyError(key)
 
-        return self._load(row)  # ty:ignore[invalid-argument-type]
+        return self._load_data(row)  # ty:ignore[invalid-argument-type]
 
     def keys(self):
         return DiskKeysView(self)
@@ -214,7 +214,7 @@ class DiskRead(Mapping):
         with self._cursor() as cursor:
             cursor.execute(select, parameters)
             for row in cursor:
-                yield row[0], self._load(row[1:])
+                yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:
         with self._cursor() as cx:

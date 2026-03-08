@@ -19,9 +19,9 @@ from typing import Any, Iterable
 
 import apsw
 
-from .config import BaseConfig, ConfigProtocol, get_sqlite_type
-from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, AnyLite, KeyType
-from .diskread import DiskRead, Value
+from .config import ConfigProtocol, get_sqlite_type
+from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, KeyType
+from .diskread import DiskRead
 
 Connection = apsw.Connection
 Cursor = apsw.Cursor
@@ -30,32 +30,30 @@ BusyError = apsw.BusyError
 
 
 class DiskStore(DiskRead, MutableMapping):
-    def __init__(  # noqa: PLR0913
-        self,
-        filename: os.PathLike | str,
-        config: ConfigProtocol | None = None,
+    def __init__(
+        self, filename: os.PathLike | str, config: ConfigProtocol | None = None
     ) -> None:
         """SQLite based MutableMapping disk storage.
 
         Args:
             filename: DiskStore DB filename.
-                      If not set a tmp directory and default DB name is created.
-            config: Configuration
+            config: Configuration as specified in ConfigProtocol
         """
         super().__init__(filename=filename, config=config)
         self._txn_id = None
         tablename = self._escape_name(self._config.tablename)
 
-        primary_key_type = self._config.key_type
+        primary_key_type = get_sqlite_type(self._config.key_type)
         value_columns = self._config.fields
-        column_types = self._config.types
         fields_create = ", ".join(
-            f"{field} {ctype} NOT NULL"
-            for field, ctype in zip(value_columns, column_types, strict=True)
+            self._get_field_create(field) for field in self._config.fields
         )
-        fields = ", ".join(f"{field}" for field in value_columns)
+        fields = ", ".join(
+            f"{DiskRead._escape_name(field)}" for field, *_ in self._config.fields
+        )
         excluded_fields = ", ".join(
-            f"{field} = excluded.{field}" for field in value_columns
+            f"{field} = excluded.{DiskRead._escape_name(field)}"
+            for field, *_ in self._config.fields
         )
         qms = ", ".join("?" for field in value_columns)
         self._statements.update(
@@ -83,6 +81,7 @@ class DiskStore(DiskRead, MutableMapping):
         )
         self._pragmas = DEFAULT_PRAGMAS.copy()
         self._pragmas.update(self._config.pragmas)
+        self._dump_value = self._config.dump_value
         sql = self._con.execute
         # Setup table.
         with closing(sql(self._statements["CREATE"])):
@@ -112,6 +111,19 @@ class DiskStore(DiskRead, MutableMapping):
                 con.pragma(key, value)
 
         return con
+
+    @staticmethod
+    def _get_field_create(field_tuple):
+        field_name, field_type, *field_default = field_tuple
+        default = ""
+        if field_default and field_default[0] is not None:
+            default = " DEFAULT " + apsw.format_sql_value(field_default[0])
+        # name: str = DiskRead._escape_name(field_name)
+        name = DiskRead._escape_name(field_name)
+        type_ = get_sqlite_type(field_type)
+        field_create = f"{name} {type_} NOT NULL{default}"
+
+        return field_create
 
     def _migrate_table(self, new_fields=()):
         tablename = self._escape_name(self._config.tablename)
@@ -173,12 +185,12 @@ class DiskStore(DiskRead, MutableMapping):
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
         with self._cursor() as cursor:
-            cursor.execute(self._statements["SET"], (key, *self._dump(value)))
+            cursor.execute(self._statements["SET"], (key, *self._dump_value(value)))
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
         with self._cursor() as cx:
             rows = cx.execute(
-                self._statements["ADD"], (key, *self._dump(value))
+                self._statements["ADD"], (key, *self._dump_value(value))
             ).fetchall()
 
         if not rows:
@@ -194,7 +206,7 @@ class DiskStore(DiskRead, MutableMapping):
                     raise KeyError(key)
                 return default
             cx.execute(self._statements["DELETE"], (key,))
-            return self._load(value)
+            return self._load_data(value)
 
     def popitem(self):
         with self.transact(retry=True) as cx:
@@ -202,7 +214,7 @@ class DiskStore(DiskRead, MutableMapping):
             if not row:
                 raise KeyError()
             key = row[0]
-            value = self._load(row[1:])
+            value = self._load_data(row[1:])
             cx.execute(self._statements["DELETE"], (key,))
             return key, value
 
@@ -247,16 +259,16 @@ class DiskStore(DiskRead, MutableMapping):
         comps = []
         if other:
             if isinstance(other, Mapping):
-                comp = ((key, *self._dump(value)) for key, value in other.items())
+                comp = ((key, *self._dump_value(value)) for key, value in other.items())
                 comps.append(comp)
             elif hasattr(other, "keys"):
-                comp = ((key, *self._dump(other[key])) for key in other.keys())
+                comp = ((key, *self._dump_value(other[key])) for key in other.keys())
                 comps.append(comp)
             else:
-                comp = ((key, *self._dump(value)) for key, value in other)
+                comp = ((key, *self._dump_value(value)) for key, value in other)
                 comps.append(comp)
         if kwargs:
-            comp = ((key, *self._dump(value)) for key, value in kwargs.items())
+            comp = ((key, *self._dump_value(value)) for key, value in kwargs.items())
             comps.append(comp)
 
         with self.transact(retry=True) as cursor:

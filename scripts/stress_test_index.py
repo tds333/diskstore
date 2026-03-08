@@ -5,10 +5,8 @@ import itertools as it
 import os
 import random
 from contextlib import suppress
-from this import s
 
 import diskstore as ds
-from diskstore.config import NamedTupleConfig
 
 KEYS = 1000
 OPERATIONS = 250000
@@ -43,8 +41,8 @@ def stress_getitem(mapping, index):
 def stress_set(mapping, index):
     key = random.randrange(KEYS)
     value = random.random()
-    mapping[key] = ds.Value(value)
-    index[key] = ds.Value(value)
+    mapping[key] = value
+    index[key] = value
 
 
 register(stress_set)
@@ -98,13 +96,11 @@ def stress(mapping, index):
 
 def test():
     random.seed(SEED)
-    mapping = co.OrderedDict(
-        (key, ds.Value(value)) for key, value in enumerate(range(KEYS))
-    )
+    mapping = co.OrderedDict((key, value) for key, value in enumerate(range(KEYS)))
     filename = "/tmp/diskstore_stress_test_index.db"
     with suppress(FileNotFoundError):
         os.remove(filename)
-    index = ds.DiskStore(filename, NamedTupleConfig())
+    index = ds.DiskStore(filename)
     index.update(mapping)
     assert mapping == index
     stress(mapping, index)

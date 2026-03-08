@@ -37,7 +37,7 @@ class DiskCache:
         filename: os.PathLike | str,
         default_expiration=TIMEOUT,
     ) -> None:
-        """Initialize DiskCache instance.
+        """Initialize DiskCache instance. Experimental!
 
         Arguments:
             filename: DiskStore DB filename.
