@@ -13,7 +13,8 @@ import os
 import os.path
 import threading
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
-from contextlib import closing, contextmanager
+from contextlib import asynccontextmanager, closing, contextmanager
+from contextvars import ContextVar
 from typing import Generator, Optional, Sequence, TypeAlias, Union
 
 import apsw
@@ -26,36 +27,6 @@ Cursor = apsw.Cursor
 
 
 BasicType: TypeAlias = Union[bytes, str, int, float]
-
-
-# class Value(NamedTuple):
-#     """Basic NamedTuple Value class.
-
-#     Usable to create key value mappings.
-#     """
-
-#     value: BasicType
-
-#     def __float__(self):
-#         data = self[0]
-#         if isinstance(data, float):
-#             return data
-#         raise ValueError("Internal value is not an instance of float.")
-
-#     def __int__(self):
-#         data = self[0]
-#         if isinstance(data, int):
-#             return data
-#         raise ValueError("Internal value is not an instance of int.")
-
-#     def __bytes__(self):
-#         data = self[0]
-#         if isinstance(data, bytes):
-#             return data
-#         raise ValueError("Internal value is not an instance of bytes.")
-
-#     def __str__(self):
-#         return str(self[0])
 
 
 class DiskKeysView(KeysView):
@@ -116,6 +87,7 @@ class DiskRead(Mapping):
         )
         self._load_data = self._config.load_data
         self._local = threading.local()
+        self._context_async_con = ContextVar("async_con", default=None)
 
         # precreated statements based on tablename and value_class
         tablename = self._escape_name(self._config.tablename)
@@ -173,6 +145,18 @@ class DiskRead(Mapping):
 
         return con
 
+    async def async_con(self) -> Connection:
+        acon = self._context_async_con.get()
+
+        if acon is None:
+            acon = await Connection.as_async(
+                self._filename, flags=apsw.SQLITE_OPEN_READONLY
+            )
+            await acon.set_busy_timeout(int(self._timeout * 1000))
+            self._context_async_con.set(acon)
+
+        return acon
+
     @contextmanager
     def _cursor(self):
         cursor: Cursor = self._con.cursor()
@@ -180,6 +164,15 @@ class DiskRead(Mapping):
             yield cursor
         finally:
             cursor.close()
+
+    @asynccontextmanager
+    async def _async_cursor(self):
+        acon = await self.async_con()
+        acursor = acon.cursor()
+        try:
+            yield acursor
+        finally:
+            await acursor.close()
 
     def __getitem__(self, key: KeyType):
         select = self._statements["GET"]
@@ -214,6 +207,22 @@ class DiskRead(Mapping):
         with self._cursor() as cursor:
             cursor.execute(select, parameters)
             for row in cursor:
+                yield row[0], self._load_data(row[1:])
+
+    async def async_query(
+        self,
+        where: Optional[str] = None,
+        parameters: Optional[Sequence] = None,
+        order: Optional[str] = None,
+    ) -> Generator[tuple, None, None]:
+
+        where = " WHERE " + where if where else ""
+        parameters = () if parameters is None else parameters
+        order = " ORDER BY " + order if order else ""
+        select = self._statements["QUERY"] + where + order
+        async with self._async_cursor() as cursor:
+            await cursor.execute(select, parameters)
+            async for row in cursor:
                 yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:

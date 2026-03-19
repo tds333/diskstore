@@ -821,9 +821,9 @@ def test_query_rowid(store) -> None:
 
 
 def test_query_multiple(store) -> None:
-    expected = [(b"order#1", "my data 1")]
+    expected = [("order#1", "my data 1")]
     for i in range(1, 100):
-        key = b"order#%d" % i
+        key = "order#%d" % i
         value = f"my data {i}"
         store[key] = value
         if i >= 10 and i < 20:
@@ -831,8 +831,9 @@ def test_query_multiple(store) -> None:
 
     # result = list(store.query(where="_key LIKE 'order#1%'"))
     result = list(
-        store.query(where="_key LIKE ?", parameters=("order#1%",), order="_key ASC")
+        store.query(where="_key like ?", parameters=("order#1%",), order="_key asc")
     )
+    print(list(store.keys()))
     assert result == expected
 
 

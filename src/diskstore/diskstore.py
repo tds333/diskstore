@@ -112,6 +112,18 @@ class DiskStore(DiskRead, MutableMapping):
 
         return con
 
+    async def async_con(self) -> Connection:
+        acon = self._context_async_con.get()
+
+        if acon is None:
+            acon = await Connection.as_async(self._filename)
+            await acon.set_busy_timeout(int(self._timeout * 1000))
+            self._context_async_con.set(acon)
+            for key, value in self._pragmas.items():
+                await acon.pragma(key, value)
+
+        return acon
+
     @staticmethod
     def _get_field_create(field_tuple):
         field_name, field_type, *field_default = field_tuple
