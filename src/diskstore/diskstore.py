@@ -82,10 +82,6 @@ class DiskStore(DiskRead, MutableMapping):
         self._pragmas = DEFAULT_PRAGMAS.copy()
         self._pragmas.update(self._config.pragmas)
         self._dump_value = self._config.dump_value
-        sql = self._con.execute
-        # Setup table.
-        with closing(sql(self._statements["CREATE"])):
-            pass
 
     @property
     def _con(self) -> Connection:
@@ -102,27 +98,30 @@ class DiskStore(DiskRead, MutableMapping):
         con = getattr(self._local, "con", None)
 
         if con is None:
-            con = self._local.con = Connection(self._filename)
+            con = Connection(self._filename)
             con.set_busy_timeout(int(self._timeout * 1000))
 
             # Some SQLite pragmas work on a per-connection basis so
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
                 con.pragma(key, value)
+            con.execute(self._statements["CREATE"])
+            self._local.con = con
 
         return con
 
-    async def async_con(self) -> Connection:
-        acon = self._context_async_con.get()
+    # async def async_con(self) -> Connection:
+    #     acon = self._context_async_con.get()
 
-        if acon is None:
-            acon = await Connection.as_async(self._filename)
-            await acon.set_busy_timeout(int(self._timeout * 1000))
-            self._context_async_con.set(acon)
-            for key, value in self._pragmas.items():
-                await acon.pragma(key, value)
+    #     if acon is None:
+    #         acon = await Connection.as_async(self._filename)
+    #         await acon.set_busy_timeout(int(self._timeout * 1000))
+    #         self._context_async_con.set(acon)
+    #         for key, value in self._pragmas.items():
+    #             await acon.pragma(key, value)
+    #         await acon.execute(self._statements["CREATE"])
 
-        return acon
+    #     return acon
 
     @staticmethod
     def _get_field_create(field_tuple):
@@ -162,7 +161,37 @@ class DiskStore(DiskRead, MutableMapping):
         cursor: Cursor = self._con.cursor()
         tid = threading.get_ident()
         txn_id = self._txn_id
-        retry_until = time() + TIMEOUT
+
+        if tid == txn_id:  # already inside a thread with a transaction
+            begin = False
+        else:
+            cursor.execute("BEGIN IMMEDIATE")
+            begin = True
+            self._txn_id = tid
+
+        try:
+            yield cursor
+        except BaseException:
+            if begin:
+                assert self._txn_id == tid
+                self._txn_id = None
+                cursor.execute("ROLLBACK")
+            cursor.close()
+            raise
+        else:
+            if begin:
+                assert self._txn_id == tid
+                self._txn_id = None
+                cursor.execute("COMMIT")
+            cursor.close()
+
+    @contextmanager
+    def transact_with_retry(self, retry=False):
+        cursor: Cursor = self._con.cursor()
+        tid = threading.get_ident()
+        txn_id = self._txn_id
+        # retry_until = time() + TIMEOUT
+        retry_until = time() + self.timeout
 
         if tid == txn_id:  # already inside a thread with a transaction
             begin = False

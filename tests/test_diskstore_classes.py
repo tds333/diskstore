@@ -19,7 +19,7 @@ import msgspec.json
 import pydantic
 
 from diskstore import DiskStore
-from diskstore.config import BaseConfig, DataclassConfig, JsonConfig
+from diskstore.config import BaseConfig, DataclassConfig, JsonConfig, PydanticConfig
 
 
 class StructConfig(BaseConfig):
@@ -35,21 +35,6 @@ class StructConfig(BaseConfig):
 
     def load_data(self, data):
         return msgspec.json.decode(data[0], type=self.struct)
-
-
-class PydanticConfig(BaseConfig):
-    def __init__(self, model, tablename=None, key_type=None, timeout=None, **pragmas):
-        super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
-        )
-        self.fields = (("value", "TEXT"),)
-        self.model = model
-
-    def dump_value(self, value):
-        return (value.model_dump_json(),)
-
-    def load_data(self, data):
-        return self.model.model_validate_json(data[0])
 
 
 @pytest.fixture

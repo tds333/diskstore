@@ -71,7 +71,7 @@ class BaseConfig(ConfigProtocol):
 
 class NamedTupleConfig(BaseConfig):
     def __init__(
-        self, value_class, tablename=None, key_type=None, timeout=None, **pragmas
+        self, value_class, tablename=None, key_type=None, timeout=None, pragmas=None
     ):
         tablename = value_class.__name__ if not tablename else tablename
         super().__init__(
@@ -101,54 +101,6 @@ class NamedTupleConfig(BaseConfig):
 
         return tuple(fields)
 
-    # @staticmethod
-    # def get_field_names(value_class):
-    #     if hasattr(value_class, "_fields"):
-    #         value_columns = tuple(value_class._fields)
-    #     # elif dataclasses.is_dataclass(value_class):
-    #     #     value_columns = tuple(
-    #     #         field.name for field in dataclasses.fields(value_class)
-    #     #     )
-    #     # elif hasattr(value_class, "__struct_fields__"):  # support msgspec.Struct
-    #     #     value_columns = tuple(value_class.__struct_fields__)
-    #     # elif hasattr(value_class, "model_fields"):  # support pydantic.BaseModel
-    #     #     value_columns = tuple(value_class.model_fields)
-    #     # elif hasattr(value_class, "__annotations__"):
-    #     #     value_columns = tuple(value_class.__annotations__)
-    #     else:
-    #         raise AttributeError(
-    #             f"Class for values {value_class} has no attibute '_fields'."
-    #         )
-    #     if "_key" in value_columns:
-    #         raise ValueError(
-    #             f"Name _key is not allowed as attribute for {value_class},"
-    #             " listed as field name in _fields."
-    #         )
-
-    #     return value_columns
-
-    # @classmethod
-    # def get_field_types(cls, value_class):
-    #     value_columns = cls.get_fields(value_class)
-    #     if hasattr(value_class, "__annotations__") and value_class.__annotations__:
-    #         type_annotations = value_class.__annotations__
-    #         value_types = []
-    #         for c_name in value_columns:
-    #             type_cls = type_annotations.get(c_name, bytes)  # types are optional
-    #             sqlite_type = get_sqlite_type(type_cls)
-    #             value_types.append(sqlite_type)
-    #     else:
-    #         value_types = ["BLOB" for _ in value_columns]
-
-    #     return tuple(value_types)
-
-    # @staticmethod
-    # def get_field_defaults(value_class) -> dict[str, AnyLite]:
-    #     value_column_defaults: dict[str, AnyLite] = getattr(
-    #         value_class, "_field_defaults", {}
-    #     )
-    #     return value_column_defaults
-
     def dump_value(self, value) -> Iterable:
         return value
 
@@ -157,7 +109,7 @@ class NamedTupleConfig(BaseConfig):
 
 
 class JsonConfig(BaseConfig):
-    def __init__(self, tablename=None, key_type=None, timeout=None, **pragmas):
+    def __init__(self, tablename=None, key_type=None, timeout=None, pragmas=None):
         super().__init__(
             tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
         )
@@ -172,7 +124,7 @@ class JsonConfig(BaseConfig):
 
 class DataclassConfig(BaseConfig):
     def __init__(
-        self, dataclass, tablename=None, key_type=None, timeout=None, **pragmas
+        self, dataclass, tablename=None, key_type=None, timeout=None, pragmas=None
     ):
         tablename = dataclass.__name__ if not tablename else tablename
         super().__init__(
@@ -213,3 +165,21 @@ class DataclassConfig(BaseConfig):
 
     def load_data(self, data: tuple) -> Any:
         return self.dataclass(*data)
+
+
+class PydanticConfig(BaseConfig):
+    def __init__(
+        self, model, tablename=None, key_type=None, timeout=None, pragmas=None
+    ):
+        tablename = model.__name__ if not tablename else tablename
+        super().__init__(
+            tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
+        )
+        self.fields = (("value", "TEXT"),)
+        self.model = model
+
+    def dump_value(self, value):
+        return (value.model_dump_json(),)
+
+    def load_data(self, data):
+        return self.model.model_validate_json(data[0])

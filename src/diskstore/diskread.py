@@ -87,7 +87,7 @@ class DiskRead(Mapping):
         )
         self._load_data = self._config.load_data
         self._local = threading.local()
-        self._context_async_con = ContextVar("async_con", default=None)
+        # self._context_async_con = ContextVar("async_con", default=None)
 
         # precreated statements based on tablename and value_class
         tablename = self._escape_name(self._config.tablename)
@@ -145,17 +145,17 @@ class DiskRead(Mapping):
 
         return con
 
-    async def async_con(self) -> Connection:
-        acon = self._context_async_con.get()
+    # async def async_con(self) -> Connection:
+    #     acon = self._context_async_con.get()
 
-        if acon is None:
-            acon = await Connection.as_async(
-                self._filename, flags=apsw.SQLITE_OPEN_READONLY
-            )
-            await acon.set_busy_timeout(int(self._timeout * 1000))
-            self._context_async_con.set(acon)
+    #     if acon is None:
+    #         acon = await Connection.as_async(
+    #             self._filename, flags=apsw.SQLITE_OPEN_READONLY
+    #         )
+    #         await acon.set_busy_timeout(int(self._timeout * 1000))
+    #         self._context_async_con.set(acon)
 
-        return acon
+    #     return acon
 
     @contextmanager
     def _cursor(self):
@@ -165,14 +165,14 @@ class DiskRead(Mapping):
         finally:
             cursor.close()
 
-    @asynccontextmanager
-    async def _async_cursor(self):
-        acon = await self.async_con()
-        acursor = acon.cursor()
-        try:
-            yield acursor
-        finally:
-            await acursor.close()
+    # @asynccontextmanager
+    # async def _async_cursor(self):
+    #     acon = await self.async_con()
+    #     acursor = acon.cursor()
+    #     try:
+    #         yield acursor
+    #     finally:
+    #         await acursor.close()
 
     def __getitem__(self, key: KeyType):
         select = self._statements["GET"]
@@ -198,32 +198,36 @@ class DiskRead(Mapping):
         where: Optional[str] = None,
         parameters: Optional[Sequence] = None,
         order: Optional[str] = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> Generator[tuple, None, None]:
         where = " WHERE " + where if where else ""
         parameters = () if parameters is None else parameters
         order = " ORDER BY " + order if order else ""
-        select = self._statements["QUERY"] + where + order
+        limit = " LIMIT " + str(limit) if limit is not None else ""
+        offset = " OFFSET " + str(offset) if offset is not None else ""
+        select = self._statements["QUERY"] + where + order + limit + offset
 
         with self._cursor() as cursor:
             cursor.execute(select, parameters)
             for row in cursor:
                 yield row[0], self._load_data(row[1:])
 
-    async def async_query(
-        self,
-        where: Optional[str] = None,
-        parameters: Optional[Sequence] = None,
-        order: Optional[str] = None,
-    ) -> Generator[tuple, None, None]:
+    # async def async_query(
+    #     self,
+    #     where: Optional[str] = None,
+    #     parameters: Optional[Sequence] = None,
+    #     order: Optional[str] = None,
+    # ) -> Generator[tuple, None, None]:
 
-        where = " WHERE " + where if where else ""
-        parameters = () if parameters is None else parameters
-        order = " ORDER BY " + order if order else ""
-        select = self._statements["QUERY"] + where + order
-        async with self._async_cursor() as cursor:
-            await cursor.execute(select, parameters)
-            async for row in cursor:
-                yield row[0], self._load_data(row[1:])
+    #     where = " WHERE " + where if where else ""
+    #     parameters = () if parameters is None else parameters
+    #     order = " ORDER BY " + order if order else ""
+    #     select = self._statements["QUERY"] + where + order
+    #     async with self._async_cursor() as cursor:
+    #         await cursor.execute(select, parameters)
+    #         async for row in cursor:
+    #             yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:
         with self._cursor() as cx:
@@ -242,6 +246,10 @@ class DiskRead(Mapping):
             cx.execute(self._statements["REVERSED"])
             for row in cx:
                 yield row[0]
+
+    def open(self):
+        connection = self._con  # noqa
+        return self
 
     def close(self) -> None:
         con = getattr(self._local, "con", None)

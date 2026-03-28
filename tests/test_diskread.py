@@ -164,7 +164,7 @@ def test_reversed_values(ro_store) -> None:
     assert values == list(reversed(data.values()))
 
 
-@pytest.mark.asyncio
-async def test_async_query(ro_store) -> None:
-    result = await anext(ro_store.async_query())
-    print(result)
+# @pytest.mark.asyncio
+# async def test_async_query(ro_store) -> None:
+#     result = await anext(ro_store.async_query())
+#     print(result)

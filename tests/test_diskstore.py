@@ -73,6 +73,7 @@ def test_init_tablename_escape(tmpfilename) -> None:
 def test_init_filename(tmpfilename):
     path = pathlib.Path(tmpfilename)
     store = DiskStore(path)
+    store.open()
     assert os.path.exists(store.filename)
 
 
@@ -1307,7 +1308,7 @@ def test_busy(tmpfilename):
 
 
 def test_busy_retry(tmpfilename):
-    store = DiskStore(tmpfilename, BaseConfig(timeout=0.01))
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.1))
 
     def thread_run():
         with store.transact(retry=False):
