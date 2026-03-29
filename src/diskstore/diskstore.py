@@ -14,13 +14,12 @@ import os.path
 import threading
 from collections.abc import Mapping, MutableMapping
 from contextlib import closing, contextmanager
-from time import sleep, time
 from typing import Any, Iterable
 
 import apsw
 
-from .config import ConfigProtocol, get_sqlite_type
-from .const import DEFAULT_PRAGMAS, MISSING, TIMEOUT, KeyType
+from .config import ConfigProtocol, escape_name, get_sqlite_type
+from .const import DEFAULT_PRAGMAS, MISSING, KeyType
 from .diskread import DiskRead
 
 Connection = apsw.Connection
@@ -41,18 +40,16 @@ class DiskStore(DiskRead, MutableMapping):
         """
         super().__init__(filename=filename, config=config)
         self._txn_id = None
-        tablename = self._escape_name(self._config.tablename)
+        tablename = escape_name(self._config.tablename)
 
         primary_key_type = get_sqlite_type(self._config.key_type)
         value_columns = self._config.fields
         fields_create = ", ".join(
             self._get_field_create(field) for field in self._config.fields
         )
-        fields = ", ".join(
-            f"{DiskRead._escape_name(field)}" for field, *_ in self._config.fields
-        )
+        fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
         excluded_fields = ", ".join(
-            f"{field} = excluded.{DiskRead._escape_name(field)}"
+            f"{field} = excluded.{escape_name(field)}"
             for field, *_ in self._config.fields
         )
         qms = ", ".join("?" for field in value_columns)
@@ -110,34 +107,20 @@ class DiskStore(DiskRead, MutableMapping):
 
         return con
 
-    # async def async_con(self) -> Connection:
-    #     acon = self._context_async_con.get()
-
-    #     if acon is None:
-    #         acon = await Connection.as_async(self._filename)
-    #         await acon.set_busy_timeout(int(self._timeout * 1000))
-    #         self._context_async_con.set(acon)
-    #         for key, value in self._pragmas.items():
-    #             await acon.pragma(key, value)
-    #         await acon.execute(self._statements["CREATE"])
-
-    #     return acon
-
     @staticmethod
     def _get_field_create(field_tuple):
         field_name, field_type, *field_default = field_tuple
         default = ""
         if field_default and field_default[0] is not None:
             default = " DEFAULT " + apsw.format_sql_value(field_default[0])
-        # name: str = DiskRead._escape_name(field_name)
-        name = DiskRead._escape_name(field_name)
+        name = escape_name(field_name)
         type_ = get_sqlite_type(field_type)
         field_create = f"{name} {type_} NOT NULL{default}"
 
         return field_create
 
     def _migrate_table(self, new_fields=()):
-        tablename = self._escape_name(self._config.tablename)
+        tablename = escape_name(self._config.tablename)
         existing_fileds = set()
         table_info_stmt = f"PRAGMA table_info({tablename});"
         sql = self._con.execute
@@ -146,7 +129,7 @@ class DiskStore(DiskRead, MutableMapping):
                 existing_fileds.add(row[1])
         for columnname, columntype, default_value in new_fields:
             if columnname not in existing_fileds:
-                name: str = self._escape_name(columnname)
+                name: str = escape_name(columnname)
                 type_ = get_sqlite_type(columntype)
                 default = apsw.format_sql_value(default_value)
                 alter_stmt = (
@@ -157,7 +140,7 @@ class DiskStore(DiskRead, MutableMapping):
                     pass
 
     @contextmanager
-    def transact(self, retry=False):
+    def transact(self):
         cursor: Cursor = self._con.cursor()
         tid = threading.get_ident()
         txn_id = self._txn_id
@@ -168,45 +151,6 @@ class DiskStore(DiskRead, MutableMapping):
             cursor.execute("BEGIN IMMEDIATE")
             begin = True
             self._txn_id = tid
-
-        try:
-            yield cursor
-        except BaseException:
-            if begin:
-                assert self._txn_id == tid
-                self._txn_id = None
-                cursor.execute("ROLLBACK")
-            cursor.close()
-            raise
-        else:
-            if begin:
-                assert self._txn_id == tid
-                self._txn_id = None
-                cursor.execute("COMMIT")
-            cursor.close()
-
-    @contextmanager
-    def transact_with_retry(self, retry=False):
-        cursor: Cursor = self._con.cursor()
-        tid = threading.get_ident()
-        txn_id = self._txn_id
-        # retry_until = time() + TIMEOUT
-        retry_until = time() + self.timeout
-
-        if tid == txn_id:  # already inside a thread with a transaction
-            begin = False
-        else:
-            while True:
-                try:
-                    cursor.execute("BEGIN IMMEDIATE")
-                    begin = True
-                    self._txn_id = tid
-                    break
-                except BusyError:
-                    if retry and time() < retry_until:
-                        sleep(0.001)
-                        continue
-                    raise
 
         try:
             yield cursor
@@ -240,7 +184,7 @@ class DiskStore(DiskRead, MutableMapping):
         return rows[0][0]
 
     def pop(self, key: KeyType, default=MISSING):
-        with self.transact(retry=True) as cx:
+        with self.transact() as cx:
             value = next(cx.execute(self._statements["GET"], (key,)), None)
             if value is None:
                 if default is MISSING:
@@ -250,7 +194,7 @@ class DiskStore(DiskRead, MutableMapping):
             return self._load_data(value)
 
     def popitem(self):
-        with self.transact(retry=True) as cx:
+        with self.transact() as cx:
             row = next(cx.execute(self._statements["POPITEM"]), None)
             if not row:
                 raise KeyError()
@@ -312,7 +256,7 @@ class DiskStore(DiskRead, MutableMapping):
             comp = ((key, *self._dump_value(value)) for key, value in kwargs.items())
             comps.append(comp)
 
-        with self.transact(retry=True) as cursor:
+        with self.transact() as cursor:
             for comp in comps:
                 cursor.executemany(self._statements["SET"], comp)
 

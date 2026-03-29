@@ -1,4 +1,4 @@
-"""DiskStor configuration classes."""
+"""DiskStore configuration classes and helpers for config."""
 
 import dataclasses
 import json
@@ -20,6 +20,11 @@ def get_sqlite_type(type_) -> str:
         sqlite_type = "REAL"
 
     return sqlite_type
+
+
+def escape_name(name: str) -> str:
+    tablename = '"' + name.replace('"', '""') + '"'
+    return tablename
 
 
 class ConfigProtocol(Protocol):

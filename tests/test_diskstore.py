@@ -1287,11 +1287,11 @@ def test_timeout(tmpfilename):
     store.close()
 
 
-def test_busy(tmpfilename):
+def test_busy_raise_error(tmpfilename):
     store = DiskStore(tmpfilename, BaseConfig(timeout=0.001))
 
     def thread_run():
-        with store.transact(retry=False):
+        with store.transact():
             store[1] = "2"
             time.sleep(0.1)
 
@@ -1300,7 +1300,7 @@ def test_busy(tmpfilename):
 
     time.sleep(0.03)
     with pytest.raises(BusyError):  # noqa: PT012
-        with store.transact(retry=False):
+        with store.transact():
             store[1] = "1"
 
     thread.join()
@@ -1308,18 +1308,18 @@ def test_busy(tmpfilename):
 
 
 def test_busy_retry(tmpfilename):
-    store = DiskStore(tmpfilename, BaseConfig(timeout=0.1))
+    store = DiskStore(tmpfilename, BaseConfig(timeout=1))
 
     def thread_run():
-        with store.transact(retry=False):
+        with store.transact():
             store[1] = "2"
-            time.sleep(0.03)
+            time.sleep(0.1)
 
     thread = threading.Thread(target=thread_run)
     thread.start()
 
     time.sleep(0.02)
-    with store.transact(retry=True):
+    with store.transact():
         store[1] = "1"
 
     thread.join()
