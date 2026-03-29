@@ -1293,12 +1293,12 @@ def test_busy_raise_error(tmpfilename):
     def thread_run():
         with store.transact():
             store[1] = "2"
-            time.sleep(0.1)
+            time.sleep(0.2)
 
     thread = threading.Thread(target=thread_run)
     thread.start()
 
-    time.sleep(0.03)
+    time.sleep(0.05)
     with pytest.raises(BusyError):  # noqa: PT012
         with store.transact():
             store[1] = "1"
