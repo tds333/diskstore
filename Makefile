@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 SOURCE_DIR = ./src
-PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14 3.13t 3.14t 3.15 3.15t
+PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14 3.14t 3.15 3.15t
+EXT_PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14
 export UV_MANAGED_PYTHON ?= 1
 
 ##@ CI/CD
@@ -25,7 +26,10 @@ tests: ## Run tests in all supporte Python versions
 
 .PHONY: ext-tests
 ext-tests: ## Run tests in all supporte Python versions
-	uv run --group ext-dev --isolated -p 3.14 pytest -n auto
+#	uv run --group ext-dev --isolated -p 3.14 pytest -n auto
+	for py_v in $(EXT_PY_VERSIONS); do \
+		uv run --group ext-dev --isolated -p $$py_v pytest -n auto; \
+	done
 
 .PHONY: check
 check: ## Run all checks

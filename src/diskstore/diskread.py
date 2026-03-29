@@ -5,20 +5,20 @@ Examples:
     # DB must exist!
     >>> ds = DiskRead("/tmp/data.db")
     >>> ds["one"]
-    Value(value=1)
+    1
 
 """
 
-import dataclasses
 import os
 import os.path
 import threading
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from contextlib import closing, contextmanager
-from typing import Generator, NamedTuple, Optional, Sequence, TypeAlias, Union
+from typing import Generator, Optional, Sequence, TypeAlias, Union
 
 import apsw
 
+from .config import BaseConfig, ConfigProtocol, escape_name
 from .const import MISSING, TIMEOUT, KeyType
 
 Connection = apsw.Connection
@@ -26,36 +26,6 @@ Cursor = apsw.Cursor
 
 
 BasicType: TypeAlias = Union[bytes, str, int, float]
-
-
-class Value(NamedTuple):
-    """Basic NamedTuple Value class.
-
-    Usable to create key value mappings.
-    """
-
-    value: BasicType
-
-    def __float__(self):
-        data = self[0]
-        if isinstance(data, float):
-            return data
-        raise ValueError("Internal value is not an instance of float.")
-
-    def __int__(self):
-        data = self[0]
-        if isinstance(data, int):
-            return data
-        raise ValueError("Internal value is not an instance of int.")
-
-    def __bytes__(self):
-        data = self[0]
-        if isinstance(data, bytes):
-            return data
-        raise ValueError("Internal value is not an instance of bytes.")
-
-    def __str__(self):
-        return str(self[0])
 
 
 class DiskKeysView(KeysView):
@@ -94,9 +64,7 @@ class DiskRead(Mapping):
     def __init__(
         self,
         filename: os.PathLike | str,
-        value_class: type = Value,
-        tablename: str = "",
-        timeout: float = TIMEOUT,
+        config: ConfigProtocol | None = None,
     ) -> None:
         """SQLite read only disk storage.
 
@@ -104,32 +72,24 @@ class DiskRead(Mapping):
 
         Args:
            filename: filename for DB to use.
-           value_class: Class type (inherited from NamedTuple)
-                              used to get back data.
-           tablename: Optional table name to use.
-           timeout: SQLite busy timeout in seconds
+           config: Configuration
 
         """
         filename = os.path.expanduser(filename)
         filename = os.path.expandvars(filename)
-        if value_class is None:
-            self._value_class = Value
-        else:
-            self._value_class = value_class
-        self._tablename = (
-            self._value_class.__name__
-            if not tablename or tablename == "_Settings"
-            else tablename
-        )
-
         self._filename = os.fspath(filename)
-        self._timeout: float = TIMEOUT if timeout < 0.0 else float(timeout)
+        self._config: ConfigProtocol = BaseConfig() if config is None else config
+        self._timeout: float = (
+            TIMEOUT
+            if (self._config.timeout is None or self._config.timeout < 0.0)
+            else float(self._config.timeout)
+        )
+        self._load_data = self._config.load_data
         self._local = threading.local()
 
         # precreated statements based on tablename and value_class
-        tablename = self._escape_name(self._tablename)
-        value_columns = self.get_fields(self._value_class)
-        fields = ", ".join(f"{field}" for field in value_columns)
+        tablename = escape_name(self._config.tablename)
+        fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
         self._statements: dict[str, str] = {
             "GET": f"SELECT {fields} FROM {tablename} WHERE _key = ? LIMIT 1",
             "CONTAINS": f"SELECT _key FROM {tablename} WHERE _key = ? LIMIT 1",
@@ -138,38 +98,6 @@ class DiskRead(Mapping):
             "COUNT": f"SELECT COUNT (_key) FROM {tablename}",
             "QUERY": f"SELECT _key, {fields} FROM {tablename}",
         }
-
-    @staticmethod
-    def get_fields(value_class):
-        if hasattr(value_class, "_fields"):
-            value_columns = tuple(value_class._fields)
-        elif dataclasses.is_dataclass(value_class):
-            value_columns = tuple(
-                field.name for field in dataclasses.fields(value_class)
-            )
-        elif hasattr(value_class, "__struct_fields__"):  # support msgspec.Struct
-            value_columns = tuple(value_class.__struct_fields__)
-        elif hasattr(value_class, "model_fields"):  # support pydantic.BaseModel
-            value_columns = tuple(value_class.model_fields)
-        elif hasattr(value_class, "__annotations__"):
-            value_columns = tuple(value_class.__annotations__)
-        else:
-            raise AttributeError(
-                f"Class for values {value_class} has no attibute '_fields'"
-                " nor attribute '__annotations__'."
-            )
-        if "_key" in value_columns:
-            raise ValueError(
-                f"Name _key is not allowed as attribute for {value_class},"
-                " listed as field name in _fields."
-            )
-
-        return value_columns
-
-    @staticmethod
-    def _escape_name(name: str) -> str:
-        tablename = '"' + name.replace('"', '""') + '"'
-        return tablename
 
     @property
     def filename(self) -> str:
@@ -184,7 +112,7 @@ class DiskRead(Mapping):
     @property
     def tablename(self) -> str:
         """Tablename used to get data from."""
-        return self._tablename
+        return self._config.tablename
 
     @property
     def _con(self) -> Connection:
@@ -224,8 +152,7 @@ class DiskRead(Mapping):
         if row is MISSING:
             raise KeyError(key)
 
-        # return self._value_class(*row)  # ty:ignore[not-iterable]
-        return self._value_class._make(row)  # ty:ignore[not-iterable]
+        return self._load_data(row)  # ty:ignore[invalid-argument-type]
 
     def keys(self):
         return DiskKeysView(self)
@@ -241,17 +168,20 @@ class DiskRead(Mapping):
         where: Optional[str] = None,
         parameters: Optional[Sequence] = None,
         order: Optional[str] = None,
+        limit: int | None = None,
+        offset: int | None = None,
     ) -> Generator[tuple, None, None]:
         where = " WHERE " + where if where else ""
         parameters = () if parameters is None else parameters
         order = " ORDER BY " + order if order else ""
-        select = self._statements["QUERY"] + where + order
+        limit = " LIMIT " + str(limit) if limit is not None else ""
+        offset = " OFFSET " + str(offset) if offset is not None else ""
+        select = self._statements["QUERY"] + where + order + limit + offset
 
         with self._cursor() as cursor:
             cursor.execute(select, parameters)
             for row in cursor:
-                # yield row[0], self._value_class(*row[1:])
-                yield row[0], self._value_class._make(row[1:])
+                yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:
         with self._cursor() as cx:
@@ -270,6 +200,10 @@ class DiskRead(Mapping):
             cx.execute(self._statements["REVERSED"])
             for row in cx:
                 yield row[0]
+
+    def open(self):
+        connection = self._con  # noqa
+        return self
 
     def close(self) -> None:
         con = getattr(self._local, "con", None)
@@ -298,9 +232,7 @@ class DiskRead(Mapping):
     def __getstate__(self):
         return {
             "filename": self.filename,
-            "timeout": self.timeout,
-            "tablename": self._tablename,
-            "value_class": self._value_class,
+            "config": self._config,
         }
 
     def __setstate__(self, state) -> None:

@@ -8,6 +8,7 @@ from typing import (
     NamedTuple,
 )
 
+from .config import NamedTupleConfig
 from .const import MISSING, TIMEOUT, KeyType
 from .diskstore import DiskStore
 
@@ -36,7 +37,7 @@ class DiskCache:
         filename: os.PathLike | str,
         default_expiration=TIMEOUT,
     ) -> None:
-        """Initialize DiskCache instance.
+        """Initialize DiskCache instance. Experimental!
 
         Arguments:
             filename: DiskStore DB filename.
@@ -45,12 +46,13 @@ class DiskCache:
         """
         self._diskstore = DiskStore(
             filename=filename,
-            value_class=CacheValue,
-            tablename="Cache",
-            timeout=TIMEOUT,
-            pragma_auto_vacuum=1,
-            pragma_synchronous=0,
-            alter_table=False,
+            config=NamedTupleConfig(
+                value_class=CacheValue,
+                tablename="Cache",
+                timeout=TIMEOUT,
+                pragma_auto_vacuum=1,
+                pragma_synchronous=0,
+            ),
         )
         self._default_expiration = default_expiration
 

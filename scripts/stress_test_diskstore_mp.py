@@ -5,7 +5,8 @@ import multiprocessing as mp
 import random
 import time
 
-from diskstore import DiskStore, Value
+from diskstore import DiskStore
+from diskstore.config import BaseConfig
 
 KEYS = 10_000
 OPERATIONS = 100_000
@@ -29,7 +30,7 @@ def stress_get(store):
 def stress_set(store):
     key = random.randrange(KEYS)
     value = random.random()
-    store[key] = Value(value)
+    store[key] = value
 
 
 register(stress_set)
@@ -93,8 +94,8 @@ def stress(seed, store):
 def test(status=False):
     random.seed(SEED)
     # store = DiskStore("/tmp/diskstore_stress_store_mp.db")
-    store = DiskStore("/tmp/diskstore_stress_store_mp.db", timeout=5)
-    store.update((key, Value(value)) for key, value in enumerate(range(KEYS)))
+    store = DiskStore("/tmp/diskstore_stress_store_mp.db", BaseConfig(timeout=5))
+    store.update((key, value) for key, value in enumerate(range(KEYS)))
     processes = []
 
     for count in range(8):

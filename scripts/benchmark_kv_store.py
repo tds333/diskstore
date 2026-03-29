@@ -15,12 +15,11 @@ value = "value"
 
 print("diskstore set")
 dc = diskstore.DiskStore("/tmp/diskstore_bench_kv.db")
-Value = diskstore.Value
-ipython.run_line_magic("timeit", "-n 100 -r 7 dc['key'] = Value(value)")
+ipython.run_line_magic("timeit", "-n 100 -r 7 dc['key'] = value")
 print("diskstore get")
 ipython.run_line_magic("timeit", "-n 100 -r 7 dc['key']")
 print("diskstore set/delete")
-ipython.run_line_magic("timeit", "-n 100 -r 7 dc['key'] = Value(value); del dc['key']")
+ipython.run_line_magic("timeit", "-n 100 -r 7 dc['key'] = value; del dc['key']")
 
 
 print("\ndiskcache set")

@@ -14,6 +14,7 @@ from typing import NamedTuple
 import pytest
 
 import diskstore as ds
+from diskstore.config import NamedTupleConfig
 
 
 @pytest.fixture
@@ -198,7 +199,7 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     data = {"a": 1, "b": 2}
     value = MyPickle.create(data)
     creation_time = value.creation_time
-    store = ds.DiskStore(tmpfilename, value_class=MyPickle)
+    store = ds.DiskStore(tmpfilename, NamedTupleConfig(value_class=MyPickle))
     store["one"] = value
     assert store["one"] == value
     assert type(store["one"].data) == bytes

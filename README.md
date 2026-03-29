@@ -5,8 +5,8 @@ in pure Python.
 
 Inspired by DiskCache library it implements a MutableMapping compatible sqlite
 based disk storage. Easy interface and very fast. Keys can be of basic sqlite storage
-classes defined by Python types `int`, `float`, `str`, `bytes`. Value is a `Namedtuple` class
-with same basic Python types.
+classes defined by Python types `int`, `float`, `str`, `bytes`. Values can be of basic sqlite
+type or with custom configuration.
 
 
 ## Features
@@ -41,10 +41,10 @@ Example:
 
 ```python
 
-from diskstore import DiskStore, Value
+from diskstore import DiskStore
 
-ds = DiskStore("/tmp/diskstore.db", value_class=Value)
-ds["key"] = Value("my value")
+ds = DiskStore("/tmp/diskstore.db")
+ds["key"] = "my value"
 print(ds["key"])
 
 ```

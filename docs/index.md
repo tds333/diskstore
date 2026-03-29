@@ -41,10 +41,10 @@ Example:
 
 ```python
 
-from diskstore import DiskStore, Value
+from diskstore import DiskStore
 
-ds = DiskStore("/tmp/diskstore.db", value_class=Value)
-ds["key"] = Value("my value")
+ds = DiskStore("/tmp/diskstore.db")
+ds["key"] = "my value"
 print(ds["key"])
 
 ```

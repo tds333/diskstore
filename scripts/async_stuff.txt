@@ -1,0 +1,56 @@
+
+on DiskRead:
+        # self._context_async_con = ContextVar("async_con", default=None)
+
+
+    # async def async_con(self) -> Connection:
+    #     acon = self._context_async_con.get()
+
+    #     if acon is None:
+    #         acon = await Connection.as_async(
+    #             self._filename, flags=apsw.SQLITE_OPEN_READONLY
+    #         )
+    #         await acon.set_busy_timeout(int(self._timeout * 1000))
+    #         self._context_async_con.set(acon)
+
+    #     return acon
+
+    # @asynccontextmanager
+    # async def _async_cursor(self):
+    #     acon = await self.async_con()
+    #     acursor = acon.cursor()
+    #     try:
+    #         yield acursor
+    #     finally:
+    #         await acursor.close()
+
+    # async def async_query(
+    #     self,
+    #     where: Optional[str] = None,
+    #     parameters: Optional[Sequence] = None,
+    #     order: Optional[str] = None,
+    # ) -> Generator[tuple, None, None]:
+
+    #     where = " WHERE " + where if where else ""
+    #     parameters = () if parameters is None else parameters
+    #     order = " ORDER BY " + order if order else ""
+    #     select = self._statements["QUERY"] + where + order
+    #     async with self._async_cursor() as cursor:
+    #         await cursor.execute(select, parameters)
+    #         async for row in cursor:
+    #             yield row[0], self._load_data(row[1:])
+
+on DiskStore:
+
+    # async def async_con(self) -> Connection:
+    #     acon = self._context_async_con.get()
+
+    #     if acon is None:
+    #         acon = await Connection.as_async(self._filename)
+    #         await acon.set_busy_timeout(int(self._timeout * 1000))
+    #         self._context_async_con.set(acon)
+    #         for key, value in self._pragmas.items():
+    #             await acon.pragma(key, value)
+    #         await acon.execute(self._statements["CREATE"])
+
+    #     return acon
