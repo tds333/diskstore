@@ -22,7 +22,6 @@ from diskstore import DiskStore
 from diskstore.config import (
     BaseConfig,
     DataclassConfig,
-    JsonConfig,
     NamedTupleConfig,
 )
 from diskstore.const import DEFAULT_PRAGMAS
@@ -448,8 +447,8 @@ def test_update_with_kv_direct(store):
     store.update(hello="World", world=False, some_thing=True)
 
     assert store["hello"] == "World"
-    assert store["world"] == False
-    assert store["some_thing"] == True
+    assert not store["world"]
+    assert store["some_thing"]
 
 
 def test_update_from_other_diskstore(tmpdir) -> None:
@@ -705,7 +704,6 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     assert type(store["one"].data) == bytes
     assert store["one"].decode() == data
     assert store["one"].creation_time == creation_time
-    old_time = value.timestamp
     assert value.update_time() != value
     store.close()
 
@@ -1035,7 +1033,7 @@ def test_iter(store) -> None:
 
     iterator = iter(store)
 
-    assert all(one == two for one, two in zip(sequence, iterator))
+    assert all(one == two for one, two in zip(sequence, iterator, strict=False))
 
     with pytest.raises(StopIteration):
         next(iterator)
@@ -1054,7 +1052,7 @@ def test_reversed(store) -> None:
 
     iterator = reversed(store)
 
-    pairs = zip(reversed(sequence), iterator)
+    pairs = zip(reversed(sequence), iterator, strict=False)
     assert all(one == two for one, two in pairs)
 
     with pytest.raises(StopIteration):
@@ -1176,7 +1174,7 @@ def test_key_roundtrip(store):
         store[key] = b"value"
         keys = list(store)
         assert len(keys) == 1
-        store_key = keys[0]
+        keys[0]
         assert store[key] == b"value"
         # assert store[store_key] == {"example0": ["value0"]}
 
@@ -1238,7 +1236,7 @@ def test_transact(store):
         b"world",
     ]
 
-    with store.transact() as cx:
+    with store.transact():
         store.update(enumerate(values))
         store[10] = 10
         assert store[10] == 10
@@ -1279,7 +1277,7 @@ def test_timeout(tmpfilename):
 
     store = DiskStore(tmpfilename, BaseConfig(timeout=0.1))
 
-    with store.transact() as cx:
+    with store.transact():
         store.update(enumerate(values))
         store[10] = 10
 
@@ -1303,7 +1301,7 @@ def test_busy_raise_error(tmpfilename):
     thread.start()
 
     time.sleep(0.05)
-    with pytest.raises(BusyError):  # noqa: PT012
+    with pytest.raises(BusyError):
         with store.transact():
             store[1] = "1"
 

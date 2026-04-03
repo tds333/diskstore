@@ -7,12 +7,11 @@ import tempfile
 import uuid
 from dataclasses import asdict, dataclass
 from decimal import Decimal
-from typing import NamedTuple, Optional
 
 import pytest
 
 from diskstore import DiskStore
-from diskstore.config import BaseConfig, DataclassConfig, JsonConfig, PydanticConfig
+from diskstore.config import BaseConfig, DataclassConfig, PydanticConfig
 
 # Check for optional dependencies
 try:

@@ -4,13 +4,12 @@ import json
 import pickle
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import ClassVar, NamedTuple, Optional
+from typing import NamedTuple, Optional
 
 import pytest
 
 from diskstore.config import (
     BaseConfig,
-    ConfigProtocol,
     DataclassConfig,
     JsonConfig,
     NamedTupleConfig,
@@ -285,7 +284,7 @@ class TestNamedTupleConfig:
         config = NamedTupleConfig(ValueWithDefaults)
         fields_dict = {f[0]: f for f in config.fields}
         assert fields_dict["count"][2] == 0
-        assert fields_dict["flag"][2] == True
+        assert fields_dict["flag"][2]
 
     def test_init_with_no_defaults(self):
         """Test NamedTupleConfig fields without defaults."""
