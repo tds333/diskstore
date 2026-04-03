@@ -1,13 +1,11 @@
 [project]
 name = "diskstore"
-version = "0.2.0"
+version = "0.3.0"
 description = "Simple MutableMapping compatible SQLite based disk storage."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "tds333", email = "tds333@mailbox.org" }]
-dependencies = [
-  "apsw>=3.51.3",
-]
+dependencies = ["apsw>=3.51.3"]
 
 [dependency-groups]
 dev = [
@@ -26,14 +24,10 @@ benchmark = [
   "sqlitedict",
 ]
 docs = [
-  "mkdocs>=1.6.1",
-  "mkdocstrings[python]>=1.0.3",
-  "zensical>=0.0.23",
+ "mkdocstrings[python]>=1.0.3",
+ "zensical>=0.0.23",
 ]
-ext-dev = [
-  "msgspec>=0.20.0",
-  "pydantic>=2.12.5",
-]
+ext-dev = ["msgspec>=0.20.0", "pydantic>=2.12.5,<=2.99.99b0"]
 
 [build-system]
 requires = ["uv_build>=0.9.2,<0.12.0"]
@@ -65,16 +59,19 @@ select = [
   "I",  # isort
   "C",  # flake8-comprehensions
   "B",  # flake8-bugbear
-  "PT",  # flake8-pytest
+  "PT", # flake8-pytest
   "N",  # naming
   # "D",  # docu
   "PL",  # pylint
-  "RUF",  # ruff
+  "RUF", # ruff
 ]
 ignore = [
   # "E501", # line too long, handled by black
-  "B008",  # do not perform function calls in argument defaults
-  "C901",  # too complex
+  "B008",    # do not perform function calls in argument defaults
+  "C901",    # too complex
   "RET504",
   "PLR2004",
 ]
+
+[tool.uv]
+exclude-newer = "1 days"

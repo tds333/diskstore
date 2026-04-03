@@ -120,6 +120,7 @@ class DiskStore(DiskRead, MutableMapping):
         return field_create
 
     def _migrate_table(self, new_fields=()):
+        migrated_fields = []
         tablename = escape_name(self._config.tablename)
         existing_fileds = set()
         table_info_stmt = f"PRAGMA table_info({tablename});"
@@ -132,12 +133,14 @@ class DiskStore(DiskRead, MutableMapping):
                 name: str = escape_name(columnname)
                 type_ = get_sqlite_type(columntype)
                 default = apsw.format_sql_value(default_value)
+                migrated_fields.append((name, type_, default))
                 alter_stmt = (
                     f"ALTER TABLE {tablename} ADD COLUMN {name}"
                     f" {type_} NOT NULL DEFAULT {default};"
                 )
                 with closing(sql(alter_stmt)) as cursor:
                     pass
+        return migrated_fields
 
     @contextmanager
     def transact(self):

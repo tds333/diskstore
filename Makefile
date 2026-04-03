@@ -27,8 +27,8 @@ tests: ## Run tests in all supporte Python versions
 .PHONY: ext-tests
 ext-tests: ## Run tests in all supporte Python versions
 #	uv run --group ext-dev --isolated -p 3.14 pytest -n auto
-	for py_v in $(EXT_PY_VERSIONS); do \
-		uv run --group ext-dev --isolated -p $$py_v pytest -n auto; \
+	for py_v in $(PY_VERSIONS); do \
+		uv run --pre --group ext-dev --isolated -p $$py_v pytest -n auto; \
 	done
 
 .PHONY: check

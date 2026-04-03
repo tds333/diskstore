@@ -160,7 +160,9 @@ def test_migrate_table(tmpfilename) -> None:
         ("offset", float, 1.1),
         ("garbage", bytes, b"A"),
     ]
-    base_new._migrate_table(new_fields)
+    migrated_fields = base_new._migrate_table(new_fields)
+    print(migrated_fields)
+    assert migrated_fields
     assert len(values) == len(base_new)
     for key, value in enumerate(values):
         print(base_new[key])
@@ -171,6 +173,8 @@ def test_migrate_table(tmpfilename) -> None:
         print(base[key])
         assert base[key] == value
 
+    migrated_fields = base_new._migrate_table(new_fields)
+    assert not migrated_fields
     base.close()
     base_new.close()
 
