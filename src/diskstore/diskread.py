@@ -166,20 +166,20 @@ class DiskRead(Mapping):
     def query(
         self,
         where: Optional[str] = None,
-        parameters: Optional[Sequence] = None,
+        parameters: Optional[Sequence | dict] = None,
         order: Optional[str] = None,
         limit: int | None = None,
         offset: int | None = None,
     ) -> Generator[tuple, None, None]:
-        where = " WHERE " + where if where else ""
-        parameters = () if parameters is None else parameters
-        order = " ORDER BY " + order if order else ""
-        limit = " LIMIT " + str(limit) if limit is not None else ""
-        offset = " OFFSET " + str(offset) if offset is not None else ""
-        select = self._statements["QUERY"] + where + order + limit + offset
+        where_ = " WHERE " + where if where else ""
+        parameters_ = () if parameters is None else parameters
+        order_ = " ORDER BY " + order if order else ""
+        limit_ = " LIMIT " + str(limit) if limit is not None else ""
+        offset_ = " OFFSET " + str(offset) if offset is not None else ""
+        select = self._statements["QUERY"] + where_ + order_ + limit_ + offset_
 
         with self._cursor() as cursor:
-            cursor.execute(select, parameters)
+            cursor.execute(select, parameters_)
             for row in cursor:
                 yield row[0], self._load_data(row[1:])
 

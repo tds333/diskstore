@@ -93,6 +93,11 @@ def test_query_one_key(ro_store) -> None:
     assert result == [(1, "1")]
 
 
+def test_query_one_key_dict(ro_store) -> None:
+    result = list(ro_store.query(where="_key=$ONE", parameters={"ONE": 1}))
+    assert result == [(1, "1")]
+
+
 def test_query_one_value(ro_store) -> None:
     result = list(ro_store.query(where="value=?", parameters=("1",)))
     assert result == [(1, "1")]

@@ -701,7 +701,7 @@ def test_custom_value_class_pickle(tmpfilename) -> None:
     store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyPickle))
     store["one"] = value
     assert store["one"] == value
-    assert type(store["one"].data) == bytes
+    assert type(store["one"].data) is bytes
     assert store["one"].decode() == data
     assert store["one"].creation_time == creation_time
     assert value.update_time() != value
@@ -737,7 +737,7 @@ def test_custom_value_class_nt_json(tmpfilename) -> None:
 
 
 def test_custom_value_class_nt_jsonb(tmpfilename) -> None:
-    from apsw import jsonb_decode, jsonb_encode
+    from apsw import jsonb_decode, jsonb_encode  # noqa: PLC0415
 
     @dataclass
     class MyData:
@@ -774,7 +774,7 @@ def test_custom_value_class_nt_jsonb(tmpfilename) -> None:
     store = DiskStore(tmpfilename, NamedTupleConfig(value_class=MyJsonB))
     store["one"] = value
     assert store["one"] == value
-    assert type(store["one"].data) == bytes
+    assert type(store["one"].data) is bytes
     assert store["one"].convert() == datac
     assert store["one"].creation_time == creation_time
     mydata = value.convert()
@@ -877,7 +877,7 @@ def test_query_json_value(store) -> None:
 
 
 def test_query_jsonb_value(store) -> None:
-    from apsw import jsonb_encode
+    from apsw import jsonb_encode  # noqa: PLC0415
 
     for i in range(1, 100):
         key = f"{i}"
