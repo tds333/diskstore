@@ -1,7 +1,6 @@
 .DEFAULT_GOAL := help
 SOURCE_DIR = ./src
-PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14 3.14t 3.15 3.15t
-EXT_PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14
+PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14
 export UV_MANAGED_PYTHON ?= 1
 
 ##@ CI/CD
@@ -24,12 +23,11 @@ tests: ## Run tests in all supporte Python versions
 		uv run --isolated -p $$py_v pytest -n auto; \
 	done
 
-.PHONY: ext-tests
-ext-tests: ## Run tests in all supporte Python versions
-#	uv run --group ext-dev --isolated -p 3.14 pytest -n auto
-	for py_v in $(PY_VERSIONS); do \
-		uv run --pre --group ext-dev --isolated -p $$py_v pytest -n auto; \
-	done
+.PHONY: latest-tests
+latest-tests: ## Run tests in all supporte Python versions
+	PYTHON_GIL=0 uv run --isolated -p 3.14t pytest -n auto;
+	uv run --pre --isolated -p 3.15 pytest -n auto;
+	PYTHON_GIL=0 uv run --pre --isolated -p 3.15t pytest -n auto;
 
 .PHONY: check
 check: ## Run all checks
@@ -57,6 +55,10 @@ bench: ## run benchmarks
 .PHONY: bench-kv
 bench-kv: ## run benchmarks kv
 	uv run --isolated --group benchmark python -m IPython scripts/benchmark_kv_store.py
+
+.PHONY: bench-all
+bench-all: ## run benchmark (get/set/delete/update)
+	uv run scripts/benchmark.py
 
 .PHONY: docs
 docs: ## build docs

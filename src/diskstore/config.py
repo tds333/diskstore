@@ -150,6 +150,7 @@ class DataclassConfig(BaseConfig):
 
         return value_columns
 
+    # fix this, should be in get_fields handled
     @classmethod
     def get_field_types(cls, value_class):
         value_columns = cls.get_fields(value_class)

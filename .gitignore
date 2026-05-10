@@ -14,3 +14,4 @@ site/
 .venv
 .coverage
 .vscode/settings.json
+scripts/bench-results
