@@ -5,13 +5,22 @@ build/
 dist/
 wheels/
 site/
-*.egg-info
+*.egg-info/
 
 .env
 .envrc
 
 # Virtual environments
-.venv
+.venv/
 .coverage
+.coverage.*
+htmlcov/
+
+# Cache dirs
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.cache/
+
 .vscode/settings.json
 scripts/bench-results
