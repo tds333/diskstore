@@ -1291,6 +1291,7 @@ def test_timeout(tmpfilename):
 
 def test_busy_raise_error(tmpfilename):
     store = DiskStore(tmpfilename, BaseConfig(timeout=0.001))
+    store.open()
 
     def thread_run():
         with store.transact():
