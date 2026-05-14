@@ -145,6 +145,7 @@ class DiskRead(Mapping):
             cursor.close()
 
     def __getitem__(self, key: KeyType):
+        """Get value for *key*, raises KeyError if not found."""
         select = self._statements["GET"]
         with self._cursor() as cursor:
             row = next(cursor.execute(select, (key,)), MISSING)
@@ -155,12 +156,18 @@ class DiskRead(Mapping):
         return self._load_data(row)  # ty:ignore[invalid-argument-type]
 
     def keys(self):
+        """Return a set-like view of keys in the mapping."""
+
         return DiskKeysView(self)
 
     def values(self):
+        """Return a set-like view of values in the mapping."""
+
         return DiskValuesView(self)
 
     def items(self):
+        """Return a set-like view of (key, value) pairs in the mapping."""
+
         return DiskItemsView(self)
 
     def query(
@@ -171,6 +178,25 @@ class DiskRead(Mapping):
         limit: int | None = None,
         offset: int | None = None,
     ) -> Generator[tuple, None, None]:
+        """Query rows with optional filtering, ordering, limit and offset.
+
+        Args:
+            where: SQL WHERE clause (without the WHERE keyword).
+            parameters: Parameters for the WHERE clause.
+            order: ORDER BY clause (without the ORDER BY keyword).
+            limit: Maximum number of rows to return.
+            offset: Number of rows to skip.
+
+        Yields:
+            (key, value) tuples.
+
+        Examples:
+            >>> from diskstore import DiskRead
+            >>> ds = DiskRead("/tmp/data.db")
+            >>> list(ds.query(where="_key > ?", parameters=(1,), limit=5))
+            [(2, 'two'), (3, 'three')]
+
+        """
         where_ = " WHERE " + where if where else ""
         parameters_ = () if parameters is None else parameters
         order_ = " ORDER BY " + order if order else ""
@@ -184,28 +210,33 @@ class DiskRead(Mapping):
                 yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:
+        """Check if *key* exists in the store."""
         with self._cursor() as cx:
             rows = cx.execute(self._statements["CONTAINS"], (key,)).fetchall()
 
         return bool(rows)
 
     def __iter__(self):
+        """Iterate over keys in insertion order."""
         with self._cursor() as cx:
             cx.execute(self._statements["ITER"])
             for row in cx:
                 yield row[0]
 
     def __reversed__(self):
+        """Iterate over keys in reverse insertion order."""
         with self._cursor() as cx:
             cx.execute(self._statements["REVERSED"])
             for row in cx:
                 yield row[0]
 
     def open(self):
+        """Open (or re-open) the database connection and return self."""
         connection = self._con  # noqa
         return self
 
     def close(self) -> None:
+        """Close the database connection if open."""
         con = getattr(self._local, "con", None)
         if con is None:
             return
@@ -223,6 +254,10 @@ class DiskRead(Mapping):
         self.close()
 
     def __len__(self):
+        """Return the number of items in the store.
+
+        To do this count is used which is not a performant implementation.
+        """
         select = self._statements["COUNT"]
 
         with closing(self._con.execute(select)) as cx:
