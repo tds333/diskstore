@@ -19,11 +19,14 @@ Usage:
 import argparse
 import json
 import os
+import platform
 import random
 import shutil
 import string
+import sys
 import tempfile
 import time
+from importlib.metadata import version, PackageNotFoundError
 
 from diskstore import DiskStore
 
@@ -92,9 +95,26 @@ class ResultsStore:
         with open(path) as f:
             return json.load(f)
 
+    @staticmethod
+    def _runtime_info() -> dict:
+        try:
+            dv = version("diskstore")
+        except PackageNotFoundError:
+            dv = "unknown"
+        return {
+            "python": sys.version.split()[0],
+            "platform": platform.platform(),
+            "diskstore": dv,
+        }
+
     def save(self, stats: dict, args: dict):
         ts = time.strftime("%Y%m%dT%H%M%S")
-        payload = {"timestamp": ts, "args": args, "stats": stats}
+        payload = {
+            "timestamp": ts,
+            "args": args,
+            "stats": stats,
+            "runtime": self._runtime_info(),
+        }
         filename = f"bench_{ts}.json"
         with open(os.path.join(self.directory, filename), "w") as f:
             json.dump(payload, f, indent=2)
@@ -321,16 +341,25 @@ def main():
     store = ResultsStore(results_dir)
 
     tmpdir = tempfile.mkdtemp(prefix="diskstore_bench-")
+    rt = ResultsStore._runtime_info()
     print(f"Benchmark tmpdir: {tmpdir}")
     print(f"Results dir:      {results_dir}")
     print(f"Ops:              {args.ops}")
     print(f"Value size:       {args.valsize}B")
     print(f"DB size:          {args.dbsize} items")
     print(f"Rounds:           {args.rounds}")
+    print(f"Python:           {rt['python']}")
+    print(f"Platform:         {rt['platform']}")
+    print(f"diskstore:        {rt['diskstore']}")
 
     previous = store.load_last()
     if previous:
-        print(f"Previous run:     {previous.get('timestamp', '?')}")
+        prev_rt = previous.get("runtime", {})
+        ts = previous.get("timestamp", "?")
+        print(f"Previous run:     {ts}")
+        if prev_rt:
+            print(f"Prev Python:      {prev_rt.get('python', '?')}")
+            print(f"Prev diskstore:   {prev_rt.get('diskstore', '?')}")
     else:
         print("Previous run:     (first run)")
 
