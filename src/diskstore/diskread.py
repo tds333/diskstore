@@ -230,7 +230,7 @@ class DiskRead(Mapping):
             for row in cx:
                 yield row[0]
 
-    def open(self):
+    def open(self) -> "DiskRead":
         """Open (or re-open) the database connection and return self."""
         connection = self._con  # noqa
         return self

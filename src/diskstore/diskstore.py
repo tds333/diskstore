@@ -69,10 +69,12 @@ class DiskStore(DiskRead, MutableMapping):
                     f"VALUES (?, {qms}) ON CONFLICT DO NOTHING RETURNING _key"
                 ),
                 "DELETE": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key",
+                "POP": f"DELETE FROM {tablename} WHERE _key = ? RETURNING {fields}",
                 "CLEAR": f"DELETE FROM {tablename};VACUUM;",
                 "POPITEM": (
-                    f"SELECT _key, {fields} FROM {tablename} ORDER BY"
-                    " rowid DESC LIMIT 1"
+                    f"DELETE FROM {tablename}"
+                    f" WHERE rowid = (SELECT MAX(rowid) FROM {tablename})"
+                    f" RETURNING _key, {fields}"
                 ),
             }
         )
@@ -187,24 +189,26 @@ class DiskStore(DiskRead, MutableMapping):
         return rows[0][0]
 
     def pop(self, key: KeyType, default=MISSING):
-        with self.transact() as cx:
-            value = next(cx.execute(self._statements["GET"], (key,)), None)
-            if value is None:
-                if default is MISSING:
-                    raise KeyError(key)
-                return default
-            cx.execute(self._statements["DELETE"], (key,))
-            return self._load_data(value)
+        with self._cursor() as cx:
+            rows = cx.execute(
+                self._statements["POP"], (key,)
+            ).fetchall()
+
+        if not rows:
+            if default is MISSING:
+                raise KeyError(key)
+            return default
+
+        return self._load_data(rows[0])
 
     def popitem(self):
-        with self.transact() as cx:
+        with self._cursor() as cx:
             row = next(cx.execute(self._statements["POPITEM"]), None)
             if not row:
                 raise KeyError()
-            key = row[0]
-            value = self._load_data(row[1:])
-            cx.execute(self._statements["DELETE"], (key,))
-            return key, value
+        key = row[0]
+        value = self._load_data(row[1:])
+        return key, value
 
     def __delitem__(self, key: KeyType) -> None:
         with self._cursor() as cursor:
