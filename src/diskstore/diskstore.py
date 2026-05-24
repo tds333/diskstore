@@ -248,24 +248,31 @@ class DiskStore(DiskRead, MutableMapping):
             pass
 
     def update(self, other=(), /, **kwargs):
-        comps = []
-        if other:
-            if isinstance(other, Mapping):
-                comp = ((key, *self._dump_value(value)) for key, value in other.items())
-                comps.append(comp)
-            elif hasattr(other, "keys"):
-                comp = ((key, *self._dump_value(other[key])) for key in other.keys())
-                comps.append(comp)
-            else:
-                comp = ((key, *self._dump_value(value)) for key, value in other)
-                comps.append(comp)
-        if kwargs:
-            comp = ((key, *self._dump_value(value)) for key, value in kwargs.items())
-            comps.append(comp)
-
         with self.transact() as cursor:
-            for comp in comps:
-                cursor.executemany(self._statements["SET"], comp)
+            if other:
+                if isinstance(other, Mapping):
+                    cursor.executemany(
+                        self._statements["SET"],
+                        (
+                            (key, *self._dump_value(value))
+                            for key, value in other.items()
+                        ),
+                    )
+                elif hasattr(other, "keys"):
+                    cursor.executemany(
+                        self._statements["SET"],
+                        ((key, *self._dump_value(other[key])) for key in other.keys()),
+                    )
+                else:
+                    cursor.executemany(
+                        self._statements["SET"],
+                        ((key, *self._dump_value(value)) for key, value in other),
+                    )
+            if kwargs:
+                cursor.executemany(
+                    self._statements["SET"],
+                    ((key, *self._dump_value(value)) for key, value in kwargs.items()),
+                )
 
     def get_readonly_instance(self):
         return DiskRead(self._filename, self._config)
