@@ -51,3 +51,8 @@ uv run pytest tests/test_diskstore_classes.py -n auto -k "Msgspec or Pydantic"
 - **Tests with pytest.mark.skipif**: `TestMsgspecStruct`, `TestPydanticModel` — conditional on optional deps.
 - **`test_docs.py`** uses `pytest-examples` to validate docstring examples in `docs/index.md`. Run separately if docs fail.
 - **Editor**: `.vscode/settings.json` exists — check before overriding.
+
+## Rules
+
+- run test after changes
+- format code with ruff

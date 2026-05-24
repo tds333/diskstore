@@ -26,7 +26,7 @@ import string
 import sys
 import tempfile
 import time
-from importlib.metadata import version, PackageNotFoundError
+from importlib.metadata import PackageNotFoundError, version
 
 from diskstore import DiskStore
 
@@ -80,6 +80,7 @@ def fmt_pct(diff: float) -> str:
 # Persistence
 # ---------------------------------------------------------------------------
 
+
 class ResultsStore:
     def __init__(self, directory: str):
         self.directory = directory
@@ -129,6 +130,7 @@ class ResultsStore:
 # Deltas
 # ---------------------------------------------------------------------------
 
+
 def compute_deltas(
     current: dict, previous: dict, *, stat_keys: tuple = ("median", "total")
 ) -> dict[str, dict]:
@@ -152,6 +154,7 @@ def compute_deltas(
 # ---------------------------------------------------------------------------
 # Benchmark
 # ---------------------------------------------------------------------------
+
 
 class Benchmark:
     BATCH = 500
@@ -201,22 +204,27 @@ class Benchmark:
         tag = f"val={self.valsize}B  db={self.dbsize}"
 
         i = 0
+
         def fn_set():
             nonlocal i
             store[target_keys[i % len(target_keys)]] = value
             i += 1
+
         self.bench(f"set [{tag}]", fn_set)
 
         j = 0
+
         def fn_get():
             nonlocal j
             _ = store[target_keys[j % len(target_keys)]]
             j += 1
+
         self.bench(f"get [{tag}]", fn_get)
 
         del_keys = [f"del{i}" for i in range(self.ops)]
         store.update(dict.fromkeys(del_keys, value))
         k = 0
+
         def fn_del():
             nonlocal k
             try:
@@ -224,12 +232,15 @@ class Benchmark:
             except KeyError:
                 pass
             k += 1
+
         self.bench(f"delete [{tag}]", fn_del)
 
         bulk_n = min(self.ops, 5000)
         bulk_data = {f"bulk{i}": make_value(self.valsize) for i in range(bulk_n)}
+
         def fn_update():
             store.update(bulk_data)
+
         self.bench(f"update [{tag}]  n={bulk_n}", fn_update, n=1)
 
         store.close()
@@ -271,10 +282,15 @@ class Benchmark:
         print(t % ("Operation", "Count", "Median", "Total"))
         for label in sorted(self.summary):
             s = self.summary[label]
-            print(t % (
-                label[:36], s["count"],
-                fmt_secs(s["median"]), fmt_secs(s["total"]),
-            ))
+            print(
+                t
+                % (
+                    label[:36],
+                    s["count"],
+                    fmt_secs(s["median"]),
+                    fmt_secs(s["total"]),
+                )
+            )
 
     def display_comparison(self, previous: dict):
         deltas = compute_deltas(self.summary, previous)
@@ -296,14 +312,24 @@ class Benchmark:
 
             print(f"  {label[:36]}")
             if prev:
-                print(row % (
-                    "before", prev["count"],
-                    fmt_secs(prev["median"]), fmt_secs(prev["total"]),
-                ))
-            print(row % (
-                "after", cur["count"],
-                fmt_secs(cur["median"]), fmt_secs(cur["total"]),
-            ))
+                print(
+                    row
+                    % (
+                        "before",
+                        prev["count"],
+                        fmt_secs(prev["median"]),
+                        fmt_secs(prev["total"]),
+                    )
+                )
+            print(
+                row
+                % (
+                    "after",
+                    cur["count"],
+                    fmt_secs(cur["median"]),
+                    fmt_secs(cur["total"]),
+                )
+            )
             if prev:
                 md = delta.get("median")
                 td = delta.get("total")
@@ -319,6 +345,7 @@ class Benchmark:
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -364,7 +391,10 @@ def main():
         print("Previous run:     (first run)")
 
     bm = Benchmark(
-        tmpdir=tmpdir, ops=args.ops, valsize=args.valsize, dbsize=args.dbsize,
+        tmpdir=tmpdir,
+        ops=args.ops,
+        valsize=args.valsize,
+        dbsize=args.dbsize,
         rounds=args.rounds,
     )
     try:

@@ -49,12 +49,11 @@ format: ## Format files using ruff format
 
 .PHONY: bench
 bench: ## run benchmarks
-	#uv run --isolated --group benchmark scripts/benchmark_core.py
 	uv run scripts/benchmark_core.py -p 1
 
 .PHONY: bench-kv
 bench-kv: ## run benchmarks kv
-	uv run --isolated --group benchmark python -m IPython scripts/benchmark_kv_store.py
+	uv run scripts/benchmark_kv_store.py
 
 .PHONY: bench-all
 bench-all: ## run benchmark (get/set/delete/update)
