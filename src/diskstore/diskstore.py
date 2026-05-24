@@ -217,13 +217,13 @@ class DiskStore(DiskRead, MutableMapping):
             raise KeyError(key)
 
     def setdefault(self, key: KeyType, default: Iterable | None = None):
-        try:
-            return self[key]
-        except KeyError:
-            if default is not None:
-                self.add(key, default)
-
-        return default
+        with self.transact():
+            try:
+                return self[key]
+            except KeyError:
+                if default is not None:
+                    self.add(key, default)
+                return default
 
     def check(self, vacuum=False):
         warns = []
