@@ -13,7 +13,7 @@ import os
 import os.path
 import threading
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
-from contextlib import closing, contextmanager
+from contextlib import closing
 from typing import Generator, Optional, Sequence, TypeAlias, Union
 
 import apsw
@@ -22,7 +22,6 @@ from .config import BaseConfig, ConfigProtocol, escape_name
 from .const import MISSING, TIMEOUT, KeyType
 
 Connection = apsw.Connection
-Cursor = apsw.Cursor
 
 
 BasicType: TypeAlias = Union[bytes, str, int, float]
@@ -136,19 +135,11 @@ class DiskRead(Mapping):
 
         return con
 
-    @contextmanager
-    def _cursor(self):
-        cursor: Cursor = self._con.cursor()
-        try:
-            yield cursor
-        finally:
-            cursor.close()
-
     def __getitem__(self, key: KeyType):
         """Get value for *key*, raises KeyError if not found."""
         select = self._statements["GET"]
-        with self._cursor() as cursor:
-            row = next(cursor.execute(select, (key,)), MISSING)
+        with closing(self._con.execute(select, (key,))) as cx:
+            row = next(cx, MISSING)
 
         if row is MISSING:
             raise KeyError(key)
@@ -204,29 +195,25 @@ class DiskRead(Mapping):
         offset_ = " OFFSET " + str(offset) if offset is not None else ""
         select = self._statements["QUERY"] + where_ + order_ + limit_ + offset_
 
-        with self._cursor() as cursor:
-            cursor.execute(select, parameters_)
+        with closing(self._con.execute(select, parameters_)) as cursor:
             for row in cursor:
                 yield row[0], self._load_data(row[1:])
 
     def __contains__(self, key: object) -> bool:
         """Check if *key* exists in the store."""
-        with self._cursor() as cx:
-            rows = cx.execute(self._statements["CONTAINS"], (key,)).fetchall()
-
-        return bool(rows)
+        with closing(self._con.execute(self._statements["CONTAINS"], (key,))) as cx:
+            row = cx.fetchone()
+        return row is not None
 
     def __iter__(self):
         """Iterate over keys in insertion order."""
-        with self._cursor() as cx:
-            cx.execute(self._statements["ITER"])
+        with closing(self._con.execute(self._statements["ITER"])) as cx:
             for row in cx:
                 yield row[0]
 
     def __reversed__(self):
         """Iterate over keys in reverse insertion order."""
-        with self._cursor() as cx:
-            cx.execute(self._statements["REVERSED"])
+        with closing(self._con.execute(self._statements["REVERSED"])) as cx:
             for row in cx:
                 yield row[0]
 

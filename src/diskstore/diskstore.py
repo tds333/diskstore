@@ -174,14 +174,16 @@ class DiskStore(DiskRead, MutableMapping):
             cursor.close()
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
-        with self._cursor() as cursor:
-            cursor.execute(self._statements["SET"], (key, *self._dump_value(value)))
+        with closing(
+            self._con.execute(self._statements["SET"], (key, *self._dump_value(value)))
+        ):
+            pass
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
-        with self._cursor() as cx:
-            rows = cx.execute(
-                self._statements["ADD"], (key, *self._dump_value(value))
-            ).fetchall()
+        with closing(
+            self._con.execute(self._statements["ADD"], (key, *self._dump_value(value)))
+        ) as cx:
+            rows = cx.fetchall()
 
         if not rows:
             return None
@@ -189,10 +191,8 @@ class DiskStore(DiskRead, MutableMapping):
         return rows[0][0]
 
     def pop(self, key: KeyType, default=MISSING):
-        with self._cursor() as cx:
-            rows = cx.execute(
-                self._statements["POP"], (key,)
-            ).fetchall()
+        with closing(self._con.execute(self._statements["POP"], (key,))) as cx:
+            rows = cx.fetchall()
 
         if not rows:
             if default is MISSING:
@@ -202,8 +202,8 @@ class DiskStore(DiskRead, MutableMapping):
         return self._load_data(rows[0])
 
     def popitem(self):
-        with self._cursor() as cx:
-            row = next(cx.execute(self._statements["POPITEM"]), None)
+        with closing(self._con.execute(self._statements["POPITEM"])) as cx:
+            row = next(cx, None)
             if not row:
                 raise KeyError()
         key = row[0]
@@ -211,9 +211,9 @@ class DiskStore(DiskRead, MutableMapping):
         return key, value
 
     def __delitem__(self, key: KeyType) -> None:
-        with self._cursor() as cursor:
-            rows = cursor.execute(self._statements["DELETE"], (key,)).fetchall()
-        if not rows:
+        with closing(self._con.execute(self._statements["DELETE"], (key,))) as cx:
+            row = cx.fetchone()
+        if row is None:
             raise KeyError(key)
 
     def setdefault(self, key: KeyType, default: Iterable | None = None):
