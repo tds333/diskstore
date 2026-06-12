@@ -202,8 +202,9 @@ class DiskStore(DiskRead, MutableMapping):
         return self._load_data(rows[0])
 
     def popitem(self):
-        with closing(self._con.execute(self._statements["POPITEM"])) as cx:
-            row = next(cx, None)
+        with self.transact() as cursor:
+            cursor.execute(self._statements["POPITEM"])
+            row = next(cursor, None)
             if not row:
                 raise KeyError()
         key = row[0]
