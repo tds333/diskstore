@@ -5,8 +5,10 @@ import os.path
 import shutil
 import tempfile
 import uuid
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -39,11 +41,11 @@ class StructConfig(BaseConfig):
         self.fields = (("value", "TEXT"),)
         self.struct = struct
 
-    def dump_value(self, value):
+    def dump_value(self, key, value) -> Sequence:
         """Serialize struct to JSON bytes."""
-        return (msgspec.json.encode(value),)
+        return (key, msgspec.json.encode(value))
 
-    def load_data(self, data):
+    def load_data(self, data: tuple) -> Any:
         """Deserialize JSON bytes to struct."""
         return msgspec.json.decode(data[1], type=self.struct)
 
@@ -82,10 +84,8 @@ class TestDataclassConfig:
         class AddressConfig(DataclassConfig):
             """Custom config for Address dataclass with Decimal handling."""
 
-            def dump_value(self, value):
-                return iter(
-                    (value.id, value.first_name, value.last_name, str(value.price))
-                )
+            def dump_value(self, key, value):
+                return (key, value.id, value.first_name, value.last_name, str(value.price))
 
             def load_data(self, data):
                 return self.dataclass(data[1], data[2], data[3], Decimal(data[4]))
@@ -131,10 +131,10 @@ class TestDataclassConfig:
                 )
                 self.fields = (("value", "TEXT"),)
 
-            def dump_value(self, value):
+            def dump_value(self, key, value):
                 d = asdict(value)
                 d["price"] = str(d["price"])
-                return (json.dumps(d),)
+                return (key, json.dumps(d))
 
             def load_data(self, data):
                 value = json.loads(data[1])

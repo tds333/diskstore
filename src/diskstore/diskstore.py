@@ -69,7 +69,10 @@ class DiskStore(DiskRead, MutableMapping):
                     f"VALUES (?, {qms}) ON CONFLICT DO NOTHING RETURNING _key"
                 ),
                 "DELETE": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key",
-                "POP": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key, {fields}",
+                "POP": (
+                    f"DELETE FROM {tablename}"
+                    f" WHERE _key = ? RETURNING _key, {fields}"
+                ),
                 "CLEAR": f"DELETE FROM {tablename};VACUUM;",
                 "POPITEM": (
                     f"DELETE FROM {tablename}"
@@ -198,13 +201,13 @@ class DiskStore(DiskRead, MutableMapping):
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
         with closing(
-            self._con.execute(self._statements["SET"], (key, *self._dump_value(value)))
+            self._con.execute(self._statements["SET"], self._dump_value(key, value))
         ):
             pass
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
         with closing(
-            self._con.execute(self._statements["ADD"], (key, *self._dump_value(value)))
+            self._con.execute(self._statements["ADD"], self._dump_value(key, value))
         ) as cx:
             rows = cx.fetchall()
 
@@ -283,25 +286,22 @@ class DiskStore(DiskRead, MutableMapping):
                 if isinstance(other, Mapping):
                     cursor.executemany(
                         self._statements["SET"],
-                        (
-                            (key, *self._dump_value(value))
-                            for key, value in other.items()
-                        ),
+                        (self._dump_value(key, value) for key, value in other.items()),
                     )
                 elif hasattr(other, "keys"):
                     cursor.executemany(
                         self._statements["SET"],
-                        ((key, *self._dump_value(other[key])) for key in other.keys()),
+                        (self._dump_value(key, other[key]) for key in other.keys()),
                     )
                 else:
                     cursor.executemany(
                         self._statements["SET"],
-                        ((key, *self._dump_value(value)) for key, value in other),
+                        (self._dump_value(key, value) for key, value in other),
                     )
             if kwargs:
                 cursor.executemany(
                     self._statements["SET"],
-                    ((key, *self._dump_value(value)) for key, value in kwargs.items()),
+                    (self._dump_value(key, value) for key, value in kwargs.items()),
                 )
 
     def get_readonly_instance(self):

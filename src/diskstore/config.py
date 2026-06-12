@@ -3,9 +3,10 @@
 import dataclasses
 import json
 from abc import abstractmethod
+from collections.abc import Sequence
 from typing import Any, Iterable, Protocol
 
-from .const import TIMEOUT, AnyLite
+from .const import TIMEOUT, AnyLite, KeyType
 
 
 def get_sqlite_type(type_) -> str:
@@ -49,9 +50,10 @@ class ConfigProtocol(Protocol):
     fields: Iterable
 
     @abstractmethod
-    def dump_value(self, value: Any) -> Iterable:
-        """Called with the value, should return an Iterable
-        which is used to write to the DB."""
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """Called with the key and value, should return a Sequence
+        with the key as first element, suitable as parameter tuple for
+        the INSERT/SET statement."""
 
     @abstractmethod
     def load_data(self, data: tuple) -> Any:
@@ -70,8 +72,8 @@ class BaseConfig(ConfigProtocol):
         self.pragmas = {} if pragmas is None else pragmas
         self.fields = [("value", "BLOB")]
 
-    def dump_value(self, value: Any) -> Iterable:
-        return (value,)
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, value)
 
     def load_data(self, data: tuple) -> Any:
         return data[1]
@@ -109,8 +111,8 @@ class NamedTupleConfig(BaseConfig):
 
         return tuple(fields)
 
-    def dump_value(self, value) -> Iterable:
-        return value
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, *value)
 
     def load_data(self, data: tuple) -> Any:
         return self.value_class._make(data[1:])
@@ -123,8 +125,8 @@ class JsonConfig(BaseConfig):
         )
         self.fields = (("value", "TEXT"),)
 
-    def dump_value(self, value: Any) -> Iterable:
-        return (json.dumps(value),)
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, json.dumps(value))
 
     def load_data(self, data: tuple) -> Any:
         return json.loads(data[1])
@@ -157,8 +159,8 @@ class DataclassConfig(BaseConfig):
             fields.append((name, sqlite_type))
         return tuple(fields)
 
-    def dump_value(self, value) -> tuple:
-        return dataclasses.astuple(value)
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, *dataclasses.astuple(value))
 
     def load_data(self, data: tuple) -> Any:
         return self.dataclass(*data[1:])
@@ -175,8 +177,8 @@ class PydanticConfig(BaseConfig):
         self.fields = (("value", "TEXT"),)
         self.model = model
 
-    def dump_value(self, value):
-        return (value.model_dump_json(),)
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, value.model_dump_json())
 
-    def load_data(self, data):
+    def load_data(self, data: tuple) -> Any:
         return self.model.model_validate_json(data[1])

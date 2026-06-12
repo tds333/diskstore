@@ -198,21 +198,21 @@ class TestBaseConfig:
     def test_dump_value_single_value(self):
         """Test dump_value returns value as tuple."""
         config = BaseConfig()
-        result = config.dump_value("test")
-        assert result == ("test",)
+        result = config.dump_value(0, "test")
+        assert result == (0, "test")
         assert isinstance(result, tuple)
 
     def test_dump_value_bytes(self):
         """Test dump_value with bytes."""
         config = BaseConfig()
-        result = config.dump_value(b"binary")
-        assert result == (b"binary",)
+        result = config.dump_value(0, b"binary")
+        assert result == (0, b"binary")
 
     def test_dump_value_number(self):
         """Test dump_value with number."""
         config = BaseConfig()
-        result = config.dump_value(42)
-        assert result == (42,)
+        result = config.dump_value(0, 42)
+        assert result == (0, 42)
 
     def test_load_data_single_value(self):
         """Test load_data extracts first element."""
@@ -349,8 +349,8 @@ class TestNamedTupleConfig:
 
         config = NamedTupleConfig(TestValue)
         value = TestValue("test", 42)
-        result = config.dump_value(value)
-        assert tuple(result) == ("test", 42)
+        result = config.dump_value(0, value)
+        assert tuple(result) == (0, "test", 42)
 
     def test_load_data(self):
         """Test load_data reconstructs NamedTuple."""
@@ -377,8 +377,8 @@ class TestNamedTupleConfig:
 
         config = NamedTupleConfig(ComplexValue)
         original = ComplexValue("hello", 123, 45.67, b"world")
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -439,34 +439,34 @@ class TestJsonConfig:
         """Test dump_value serializes dict to JSON."""
         config = JsonConfig()
         data = {"name": "test", "count": 42}
-        result = config.dump_value(data)
-        assert result == (json.dumps(data),)
+        result = config.dump_value(0, data)
+        assert result == (0, json.dumps(data))
 
     def test_dump_value_list(self):
         """Test dump_value serializes list to JSON."""
         config = JsonConfig()
         data = [1, 2, 3, "test"]
-        result = config.dump_value(data)
-        assert result == (json.dumps(data),)
+        result = config.dump_value(0, data)
+        assert result == (0, json.dumps(data))
 
     def test_dump_value_string(self):
         """Test dump_value serializes string to JSON."""
         config = JsonConfig()
         data = "test string"
-        result = config.dump_value(data)
-        assert result == (json.dumps(data),)
+        result = config.dump_value(0, data)
+        assert result == (0, json.dumps(data))
 
     def test_dump_value_number(self):
         """Test dump_value serializes number to JSON."""
         config = JsonConfig()
-        result = config.dump_value(42)
-        assert result == ("42",)
+        result = config.dump_value(0, 42)
+        assert result == (0, "42")
 
     def test_dump_value_null(self):
         """Test dump_value serializes None to JSON null."""
         config = JsonConfig()
-        result = config.dump_value(None)
-        assert result == ("null",)
+        result = config.dump_value(0, None)
+        assert result == (0, "null")
 
     def test_load_data_dict(self):
         """Test load_data deserializes JSON dict."""
@@ -505,8 +505,8 @@ class TestJsonConfig:
         """Test dump_value -> load_data roundtrip."""
         config = JsonConfig()
         original = {"name": "test", "data": [1, 2, 3], "flag": True}
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_roundtrip_complex(self):
@@ -519,8 +519,8 @@ class TestJsonConfig:
             ],
             "meta": {"count": 2, "version": 1},
         }
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_invalid_json_raises(self):
@@ -639,8 +639,8 @@ class TestDataclassConfig:
 
         config = DataclassConfig(Data)
         value = Data("test", 42)
-        result = config.dump_value(value)
-        assert result == ("test", 42)
+        result = config.dump_value(0, value)
+        assert result == (0, "test", 42)
 
     def test_dump_value_with_defaults(self):
         """Test dump_value includes default values."""
@@ -653,8 +653,8 @@ class TestDataclassConfig:
 
         config = DataclassConfig(Data)
         value = Data("test", 10, True)
-        result = config.dump_value(value)
-        assert result == ("test", 10, True)
+        result = config.dump_value(0, value)
+        assert result == (0, "test", 10, True)
 
     def test_load_data(self):
         """Test load_data reconstructs dataclass."""
@@ -683,8 +683,8 @@ class TestDataclassConfig:
 
         config = DataclassConfig(ComplexData)
         original = ComplexData("hello", 123, 45.67, b"world")
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -778,10 +778,10 @@ class TestPydanticConfig:
 
         config = PydanticConfig(Data)
         value = Data(name="test", count=42)
-        result = config.dump_value(value)
-        assert len(result) == 1
+        result = config.dump_value(0, value)
+        assert len(result) == 2
         # Parse to verify it's valid JSON
-        parsed = json.loads(result[0])
+        parsed = json.loads(result[1])
         assert parsed["name"] == "test"
         assert parsed["count"] == 42
 
@@ -809,8 +809,8 @@ class TestPydanticConfig:
 
         config = PydanticConfig(ComplexData)
         original = ComplexData(text="hello", number=123, floating=45.67)
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -907,16 +907,16 @@ class TestConfigEdgeCases:
         """Test JSON config with empty dict."""
         config = JsonConfig()
         original = {}
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == {}
 
     def test_json_config_empty_list(self):
         """Test JSON config with empty list."""
         config = JsonConfig()
         original = []
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == []
 
     def test_namedtuple_with_multiple_same_types(self):
@@ -929,8 +929,8 @@ class TestConfigEdgeCases:
 
         config = NamedTupleConfig(MultiStr)
         original = MultiStr("one", "two", "three")
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_dataclass_with_optional_fields(self):
@@ -943,8 +943,8 @@ class TestConfigEdgeCases:
 
         config = DataclassConfig(DataWithOptional)
         original = DataWithOptional("test", None)
-        dumped = config.dump_value(original)
-        loaded = config.load_data((0, *dumped))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
         assert loaded == original
 
     def test_dataclass_with_decimal(self):
