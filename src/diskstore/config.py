@@ -16,6 +16,8 @@ def get_sqlite_type(type_) -> str:
         sqlite_type = "TEXT"
     elif type_ is int:
         sqlite_type = "INTEGER"
+    elif type_ is bool:
+        sqlite_type = "INTEGER"
     elif type_ is float:
         sqlite_type = "REAL"
 
@@ -137,34 +139,22 @@ class DataclassConfig(BaseConfig):
         )
         self.dataclass = dataclass
         self.fields = self.get_fields(dataclass)
-        self.types = self.get_field_types(dataclass)
 
     @staticmethod
     def get_fields(dataclass):
-        if dataclasses.is_dataclass(dataclass):
-            value_columns = tuple(field.name for field in dataclasses.fields(dataclass))
-        else:
+        if not dataclasses.is_dataclass(dataclass):
             raise ValueError("It is not a dataclass.")
+        dc_fields = dataclasses.fields(dataclass)
+        value_columns = tuple(field.name for field in dc_fields)
         if "_key" in value_columns:
             raise ValueError("Name _key is not allowed as attribute for dataclass.")
-
-        return value_columns
-
-    # fix this, should be in get_fields handled
-    @classmethod
-    def get_field_types(cls, value_class):
-        value_columns = cls.get_fields(value_class)
-        if hasattr(value_class, "__annotations__") and value_class.__annotations__:
-            type_annotations = value_class.__annotations__
-            value_types = []
-            for c_name in value_columns:
-                type_cls = type_annotations.get(c_name, bytes)  # types are optional
-                sqlite_type = get_sqlite_type(type_cls)
-                value_types.append(sqlite_type)
-        else:
-            value_types = ["BLOB" for _ in value_columns]
-
-        return tuple(value_types)
+        type_annotations = getattr(dataclass, "__annotations__", {}) or {}
+        fields = []
+        for name in value_columns:
+            type_cls = type_annotations.get(name, bytes)
+            sqlite_type = get_sqlite_type(type_cls)
+            fields.append((name, sqlite_type))
+        return tuple(fields)
 
     def dump_value(self, value) -> tuple:
         return dataclasses.astuple(value)

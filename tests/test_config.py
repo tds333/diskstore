@@ -549,7 +549,7 @@ class TestDataclassConfig:
         config = DataclassConfig(SimpleData)
         assert config.tablename == "SimpleData"
         assert config.dataclass == SimpleData
-        assert config.fields == ("name", "count")
+        assert config.fields == (("name", "TEXT"), ("count", "INTEGER"))
 
     def test_init_custom_tablename(self):
         """Test DataclassConfig with custom tablename."""
@@ -571,7 +571,7 @@ class TestDataclassConfig:
             flag: bool = True
 
         config = DataclassConfig(DataWithDefaults)
-        assert config.fields == ("name", "count", "flag")
+        assert config.fields == (("name", "TEXT"), ("count", "INTEGER"), ("flag", "INTEGER"))
 
     def test_get_fields_simple(self):
         """Test get_fields extracts field names."""
@@ -583,7 +583,7 @@ class TestDataclassConfig:
             c: float
 
         fields = DataclassConfig.get_fields(Data)
-        assert fields == ("a", "b", "c")
+        assert fields == (("a", "TEXT"), ("b", "INTEGER"), ("c", "REAL"))
 
     def test_get_fields_non_dataclass_raises(self):
         """Test get_fields raises for non-dataclass."""
@@ -606,7 +606,7 @@ class TestDataclassConfig:
             DataclassConfig.get_fields(BadData)
 
     def test_get_field_types(self):
-        """Test get_field_types extracts field types."""
+        """Test get_fields extracts field types."""
 
         @dataclass
         class TypedData:
@@ -615,19 +615,19 @@ class TestDataclassConfig:
             floating: float
             data: bytes
 
-        types = DataclassConfig.get_field_types(TypedData)
-        assert types == ("TEXT", "INTEGER", "REAL", "BLOB")
+        types = [t for _, t in DataclassConfig.get_fields(TypedData)]
+        assert tuple(types) == ("TEXT", "INTEGER", "REAL", "BLOB")
 
     def test_get_field_types_no_annotations(self):
-        """Test get_field_types defaults to BLOB for unannotated."""
+        """Test get_fields defaults to BLOB for unannotated."""
 
         @dataclass
         class UnannotatedData:
             field1: str
             field2: int
 
-        types = DataclassConfig.get_field_types(UnannotatedData)
-        assert types == ("TEXT", "INTEGER")
+        types = [t for _, t in DataclassConfig.get_fields(UnannotatedData)]
+        assert tuple(types) == ("TEXT", "INTEGER")
 
     def test_dump_value(self):
         """Test dump_value returns tuple of field values."""
@@ -727,7 +727,7 @@ class TestDataclassConfig:
             items: list = field(default_factory=list)
 
         config = DataclassConfig(DataWithList)
-        assert config.fields == ("name", "items")
+        assert config.fields == (("name", "TEXT"), ("items", "BLOB"))
 
     def test_init_non_dataclass_raises(self):
         """Test DataclassConfig raises for non-dataclass."""
@@ -957,7 +957,7 @@ class TestConfigEdgeCases:
 
         config = DataclassConfig(PriceData)
         # Decimal is not a standard type, will default to BLOB
-        assert config.types == ("TEXT", "BLOB")
+        assert config.fields == (("name", "TEXT"), ("price", "BLOB"))
 
     def test_config_pickling(self):
         """Test BaseConfig can be pickled."""
