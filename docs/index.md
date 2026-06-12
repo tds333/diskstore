@@ -49,6 +49,32 @@ print(ds["key"])
 
 ```
 
+### Bulk writes
+
+Each individual write (``__setitem__``, ``__delitem__``, etc.) creates
+an implicit SQLite transaction.  Wrapping many writes in
+``transact()`` eliminates that overhead and can be several times faster:
+
+```python
+
+from diskstore import DiskStore
+
+ds = DiskStore("/tmp/diskstore.db")
+
+# slow: one implicit transaction per write
+for i in range(1000):
+    ds[i] = "value"
+
+# fast: single explicit transaction
+with ds.transact():
+    for i in range(1000):
+        ds[i] = "value"
+
+# equivalent via update() (transactional by default)
+ds.update({i: "value" for i in range(1000)})
+
+```
+
 Everything is mostly stable and test coverage is nearly 100%. Documentation is missing.
 
 ### Timings

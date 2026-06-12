@@ -146,6 +146,29 @@ class DiskStore(DiskRead, MutableMapping):
 
     @contextmanager
     def transact(self):
+        """Wrapper for performance sensitive bulk writes.
+
+        Every write operation (``__setitem__``, ``__delitem__``, ``add``,
+        etc.) runs in an implicit transaction when called outside of
+        ``transact()``.  The implicit begin/commit overhead adds up when
+        writing many items in a loop:
+
+        .. code:: python
+
+            # slow: one implicit transaction per write
+            for i in range(1000):
+                store[i] = value
+
+            # fast: single explicit transaction
+            with store.transact():
+                for i in range(1000):
+                    store[i] = value
+
+        Uses ``BEGIN IMMEDIATE`` to avoid deadlocks in concurrent
+        workloads.  Nested calls are idempotent (reuse the same
+        transaction).  Yields an ``apsw.Cursor`` for callers that need
+        direct SQL execution.
+        """
         cursor: Cursor = self._con.cursor()
         tid = threading.get_ident()
         txn_id = self._txn_id
@@ -249,6 +272,12 @@ class DiskStore(DiskRead, MutableMapping):
             pass
 
     def update(self, other=(), /, **kwargs):
+        """Bulk upsert from a mapping or iterable.
+
+        Wrapped in ``transact()`` so all upserts share a single
+        transaction — significantly faster than setting keys
+        individually in a loop.
+        """
         with self.transact() as cursor:
             if other:
                 if isinstance(other, Mapping):
