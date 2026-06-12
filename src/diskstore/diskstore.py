@@ -92,7 +92,7 @@ class DiskStore(DiskRead, MutableMapping):
 
         if local_pid != pid:
             self.close()
-            self._local.pid: int = pid
+            self._local.pid = pid
 
         con = getattr(self._local, "con", None)
 
