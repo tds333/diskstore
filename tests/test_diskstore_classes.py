@@ -50,6 +50,22 @@ class StructConfig(BaseConfig):
         return msgspec.json.decode(data[1], type=self.struct)
 
 
+class KeyFromValueConfig(BaseConfig):
+    """Config that derives the key from the value when key is None."""
+
+    def __init__(self, *, key_type=None, **kwargs):
+        super().__init__(key_type=key_type, **kwargs)
+        self.fields = (("value", "TEXT"),)
+
+    def dump_value(self, key, value) -> Sequence:
+        if key is None:
+            key = value["id"]
+        return (key, json.dumps(value))
+
+    def load_data(self, data: tuple) -> Any:
+        return json.loads(data[1])
+
+
 # ============================================================================
 # Fixtures
 # ============================================================================
@@ -68,6 +84,20 @@ def tmpfilename(tmpdir):
     """Create temporary filename for test database."""
     filename = os.path.join(tmpdir, "diskstore.db")
     return filename
+
+
+def test_key_derived_from_value(tmpfilename):
+    """Test that dump_value can derive the key when passed None."""
+    store = DiskStore(tmpfilename, KeyFromValueConfig(key_type=str))
+
+    key = store.add(None, {"id": "auto-key", "name": "test"})
+    assert key == "auto-key"
+    assert store["auto-key"] == {"id": "auto-key", "name": "test"}
+
+    store["explicit"] = {"id": "ignored", "name": "explicit"}
+    assert store["explicit"] == {"id": "ignored", "name": "explicit"}
+
+    store.close()
 
 
 # ============================================================================
