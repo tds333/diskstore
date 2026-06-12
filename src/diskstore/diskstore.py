@@ -69,7 +69,7 @@ class DiskStore(DiskRead, MutableMapping):
                     f"VALUES (?, {qms}) ON CONFLICT DO NOTHING RETURNING _key"
                 ),
                 "DELETE": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key",
-                "POP": f"DELETE FROM {tablename} WHERE _key = ? RETURNING {fields}",
+                "POP": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key, {fields}",
                 "CLEAR": f"DELETE FROM {tablename};VACUUM;",
                 "POPITEM": (
                     f"DELETE FROM {tablename}"
@@ -231,7 +231,7 @@ class DiskStore(DiskRead, MutableMapping):
             if not row:
                 raise KeyError()
         key = row[0]
-        value = self._load_data(row[1:])
+        value = self._load_data(row)
         return key, value
 
     def __delitem__(self, key: KeyType) -> None:

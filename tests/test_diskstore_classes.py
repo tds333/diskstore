@@ -45,7 +45,7 @@ class StructConfig(BaseConfig):
 
     def load_data(self, data):
         """Deserialize JSON bytes to struct."""
-        return msgspec.json.decode(data[0], type=self.struct)
+        return msgspec.json.decode(data[1], type=self.struct)
 
 
 # ============================================================================
@@ -88,7 +88,7 @@ class TestDataclassConfig:
                 )
 
             def load_data(self, data):
-                return self.dataclass(data[0], data[1], data[2], Decimal(data[3]))
+                return self.dataclass(data[1], data[2], data[3], Decimal(data[4]))
 
         @dataclass
         class Address:
@@ -137,7 +137,7 @@ class TestDataclassConfig:
                 return (json.dumps(d),)
 
             def load_data(self, data):
-                value = json.loads(data[0])
+                value = json.loads(data[1])
                 value["price"] = Decimal(value["price"])
                 return self.dataclass(**value)
 

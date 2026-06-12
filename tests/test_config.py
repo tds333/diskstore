@@ -217,13 +217,13 @@ class TestBaseConfig:
     def test_load_data_single_value(self):
         """Test load_data extracts first element."""
         config = BaseConfig()
-        result = config.load_data(("test",))
+        result = config.load_data((0, "test"))
         assert result == "test"
 
     def test_load_data_multiple_values(self):
         """Test load_data with tuple ignores extra values."""
         config = BaseConfig()
-        result = config.load_data(("first", "second", "third"))
+        result = config.load_data((0, "first", "second", "third"))
         assert result == "first"
 
     def test_load_data_empty_tuple_raises(self):
@@ -360,7 +360,7 @@ class TestNamedTupleConfig:
             count: int
 
         config = NamedTupleConfig(TestValue)
-        data = ("test", 42)
+        data = (0, "test", 42)
         result = config.load_data(data)
         assert isinstance(result, TestValue)
         assert result.name == "test"
@@ -378,7 +378,7 @@ class TestNamedTupleConfig:
         config = NamedTupleConfig(ComplexValue)
         original = ComplexValue("hello", 123, 45.67, b"world")
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -472,33 +472,33 @@ class TestJsonConfig:
         """Test load_data deserializes JSON dict."""
         config = JsonConfig()
         json_str = json.dumps({"name": "test", "count": 42})
-        result = config.load_data((json_str,))
+        result = config.load_data((0, json_str))
         assert result == {"name": "test", "count": 42}
 
     def test_load_data_list(self):
         """Test load_data deserializes JSON list."""
         config = JsonConfig()
         json_str = json.dumps([1, 2, 3])
-        result = config.load_data((json_str,))
+        result = config.load_data((0, json_str))
         assert result == [1, 2, 3]
 
     def test_load_data_string(self):
         """Test load_data deserializes JSON string."""
         config = JsonConfig()
         json_str = json.dumps("test")
-        result = config.load_data((json_str,))
+        result = config.load_data((0, json_str))
         assert result == "test"
 
     def test_load_data_number(self):
         """Test load_data deserializes JSON number."""
         config = JsonConfig()
-        result = config.load_data(("42",))
+        result = config.load_data((0, "42"))
         assert result == 42
 
     def test_load_data_null(self):
         """Test load_data deserializes JSON null."""
         config = JsonConfig()
-        result = config.load_data(("null",))
+        result = config.load_data((0, "null"))
         assert result is None
 
     def test_roundtrip(self):
@@ -506,7 +506,7 @@ class TestJsonConfig:
         config = JsonConfig()
         original = {"name": "test", "data": [1, 2, 3], "flag": True}
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_roundtrip_complex(self):
@@ -520,14 +520,14 @@ class TestJsonConfig:
             "meta": {"count": 2, "version": 1},
         }
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_invalid_json_raises(self):
         """Test load_data raises on invalid JSON."""
         config = JsonConfig()
         with pytest.raises(json.JSONDecodeError):
-            config.load_data(("{invalid json}",))
+            config.load_data((0, "{invalid json}"))
 
 
 # ============================================================================
@@ -665,7 +665,7 @@ class TestDataclassConfig:
             count: int
 
         config = DataclassConfig(Data)
-        data = ("test", 42)
+        data = (0, "test", 42)
         result = config.load_data(data)
         assert isinstance(result, Data)
         assert result.name == "test"
@@ -684,7 +684,7 @@ class TestDataclassConfig:
         config = DataclassConfig(ComplexData)
         original = ComplexData("hello", 123, 45.67, b"world")
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -794,7 +794,7 @@ class TestPydanticConfig:
 
         config = PydanticConfig(Data)
         json_str = json.dumps({"name": "test", "count": 42})
-        result = config.load_data((json_str,))
+        result = config.load_data((0, json_str))
         assert isinstance(result, Data)
         assert result.name == "test"
         assert result.count == 42
@@ -810,7 +810,7 @@ class TestPydanticConfig:
         config = PydanticConfig(ComplexData)
         original = ComplexData(text="hello", number=123, floating=45.67)
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_key_type_parameter(self):
@@ -850,13 +850,13 @@ class TestPydanticConfig:
         config = PydanticConfig(Data)
         # Valid data
         json_str = json.dumps({"count": 42})
-        result = config.load_data((json_str,))
+        result = config.load_data((0, json_str))
         assert result.count == 42
 
         # Invalid data (string instead of int)
         invalid_json = json.dumps({"count": "not_an_int"})
         with pytest.raises(pydantic.ValidationError):
-            config.load_data((invalid_json,))
+            config.load_data((0, invalid_json))
 
 
 # ============================================================================
@@ -908,7 +908,7 @@ class TestConfigEdgeCases:
         config = JsonConfig()
         original = {}
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == {}
 
     def test_json_config_empty_list(self):
@@ -916,7 +916,7 @@ class TestConfigEdgeCases:
         config = JsonConfig()
         original = []
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == []
 
     def test_namedtuple_with_multiple_same_types(self):
@@ -930,7 +930,7 @@ class TestConfigEdgeCases:
         config = NamedTupleConfig(MultiStr)
         original = MultiStr("one", "two", "three")
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_dataclass_with_optional_fields(self):
@@ -944,7 +944,7 @@ class TestConfigEdgeCases:
         config = DataclassConfig(DataWithOptional)
         original = DataWithOptional("test", None)
         dumped = config.dump_value(original)
-        loaded = config.load_data(dumped)
+        loaded = config.load_data((0, *dumped))
         assert loaded == original
 
     def test_dataclass_with_decimal(self):

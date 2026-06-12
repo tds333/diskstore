@@ -90,7 +90,7 @@ class DiskRead(Mapping):
         tablename = escape_name(self._config.tablename)
         fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
         self._statements: dict[str, str] = {
-            "GET": f"SELECT {fields} FROM {tablename} WHERE _key = ? LIMIT 1",
+            "GET": f"SELECT _key, {fields} FROM {tablename} WHERE _key = ? LIMIT 1",
             "CONTAINS": f"SELECT _key FROM {tablename} WHERE _key = ? LIMIT 1",
             "ITER": f"SELECT _key FROM {tablename} ORDER BY rowid ASC",
             "REVERSED": f"SELECT _key FROM {tablename} ORDER BY rowid DESC",
@@ -197,7 +197,7 @@ class DiskRead(Mapping):
 
         with closing(self._con.execute(select, parameters_)) as cursor:
             for row in cursor:
-                yield row[0], self._load_data(row[1:])
+                yield row[0], self._load_data(row)
 
     def __contains__(self, key: object) -> bool:
         """Check if *key* exists in the store."""

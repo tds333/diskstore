@@ -55,8 +55,9 @@ class ConfigProtocol(Protocol):
 
     @abstractmethod
     def load_data(self, data: tuple) -> Any:
-        """load(db_data): called with the tuple selected from DB.
-        Should be converted to the type normally received as value."""
+        """load(db_data): called with the tuple selected from DB,
+        including the key at index 0.  Should be converted to the
+        type normally received as value."""
 
 
 class BaseConfig(ConfigProtocol):
@@ -73,7 +74,7 @@ class BaseConfig(ConfigProtocol):
         return (value,)
 
     def load_data(self, data: tuple) -> Any:
-        return data[0]
+        return data[1]
 
 
 class NamedTupleConfig(BaseConfig):
@@ -112,7 +113,7 @@ class NamedTupleConfig(BaseConfig):
         return value
 
     def load_data(self, data: tuple) -> Any:
-        return self.value_class._make(data)
+        return self.value_class._make(data[1:])
 
 
 class JsonConfig(BaseConfig):
@@ -126,7 +127,7 @@ class JsonConfig(BaseConfig):
         return (json.dumps(value),)
 
     def load_data(self, data: tuple) -> Any:
-        return json.loads(data[0])
+        return json.loads(data[1])
 
 
 class DataclassConfig(BaseConfig):
@@ -160,7 +161,7 @@ class DataclassConfig(BaseConfig):
         return dataclasses.astuple(value)
 
     def load_data(self, data: tuple) -> Any:
-        return self.dataclass(*data)
+        return self.dataclass(*data[1:])
 
 
 class PydanticConfig(BaseConfig):
@@ -178,4 +179,4 @@ class PydanticConfig(BaseConfig):
         return (value.model_dump_json(),)
 
     def load_data(self, data):
-        return self.model.model_validate_json(data[0])
+        return self.model.model_validate_json(data[1])
