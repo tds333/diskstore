@@ -5,11 +5,18 @@ from typing import (
     Union,
 )
 
-TIMEOUT = 60.0
+TIMEOUT = 10.0
 "default timout in seconds"
 
 MISSING = object()
 
+DEFAULT_RO_PRAGMAS = {
+    "cache_size": 2**13,  # 8,192 pages
+    "mmap_size": 2**28,  # 256 MB
+    "temp_store": 2,  # 0=DEFAULT, 1=FILE, 2=MEMORY
+    "synchronous": 1,  # 0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA
+}
+"default read only pragma settings"
 
 DEFAULT_PRAGMAS = {
     "auto_vacuum": 0,  # 1=FULL, 0=None
@@ -17,7 +24,7 @@ DEFAULT_PRAGMAS = {
     "journal_mode": "wal",
     "mmap_size": 2**28,  # 256 MB
     "synchronous": 1,  # 0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA
-    "temp_store": "memory",
+    "temp_store": 2,  # 0=DEFAULT, 1=FILE, 2=MEMORY
     # "pargma_busy_timeout": 5000,  # milliseconds
 }
 "default pragma settings"

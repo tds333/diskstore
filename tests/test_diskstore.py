@@ -18,13 +18,13 @@ from unittest import mock
 
 import pytest
 
-from diskstore import DiskStore
+from diskstore import DiskRead, DiskStore
 from diskstore.config import (
     BaseConfig,
     DataclassConfig,
     NamedTupleConfig,
 )
-from diskstore.const import DEFAULT_PRAGMAS
+from diskstore.const import DEFAULT_PRAGMAS, DEFAULT_RO_PRAGMAS
 from diskstore.diskstore import BusyError
 
 
@@ -1132,17 +1132,12 @@ def test_pragmas(store) -> None:
         valid = True
 
         for key, value in DEFAULT_PRAGMAS.items():
-            if not key.startswith("sqlite_"):
+            result = store._con.pragma(key)
+
+            if result == value:
                 continue
 
-            pragma = key[7:]
-
-            result = store._sql("PRAGMA %s" % pragma).fetchall()
-
-            if result == [(value,)]:
-                continue
-
-            args = pragma, result, [(value,)]
+            args = key, result, value
             print("pragma %s mismatch: %r != %r" % args)
             valid = False
 
@@ -1159,6 +1154,20 @@ def test_pragmas(store) -> None:
         thread.join()
 
     assert all(results)
+
+
+def test_diskread_pragmas(tmpfilename) -> None:
+    # Seed the file via DiskStore, then reopen as DiskRead.
+    with DiskStore(tmpfilename) as seed:
+        seed["k"] = "v"
+
+    reader = DiskRead(tmpfilename)
+
+    try:
+        for key, value in DEFAULT_RO_PRAGMAS.items():
+            assert reader._con.pragma(key) == value, f"pragma {key} mismatch: {reader._con.pragma(key)} != {value}"
+    finally:
+        reader.close()
 
 
 def test_key_roundtrip(store):

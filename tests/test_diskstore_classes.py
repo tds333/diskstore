@@ -115,7 +115,13 @@ class TestDataclassConfig:
             """Custom config for Address dataclass with Decimal handling."""
 
             def dump_value(self, key, value):
-                return (key, value.id, value.first_name, value.last_name, str(value.price))
+                return (
+                    key,
+                    value.id,
+                    value.first_name,
+                    value.last_name,
+                    str(value.price),
+                )
 
             def load_data(self, data):
                 return self.dataclass(data[1], data[2], data[3], Decimal(data[4]))

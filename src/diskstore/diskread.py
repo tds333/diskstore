@@ -19,7 +19,7 @@ from typing import Generator, Optional, Sequence, TypeAlias, Union
 import apsw
 
 from .config import BaseConfig, ConfigProtocol, escape_name
-from .const import MISSING, TIMEOUT, KeyType
+from .const import DEFAULT_RO_PRAGMAS, MISSING, TIMEOUT, KeyType
 
 Connection = apsw.Connection
 
@@ -84,6 +84,8 @@ class DiskRead(Mapping):
             else float(self._config.timeout)
         )
         self._load_data = self._config.load_data
+        self._pragmas = DEFAULT_RO_PRAGMAS.copy()
+        self._pragmas.update(self._config.pragmas)
         self._local = threading.local()
 
         # precreated statements based on tablename and value_class
@@ -132,6 +134,11 @@ class DiskRead(Mapping):
                 self._filename, flags=apsw.SQLITE_OPEN_READONLY
             )
             con.set_busy_timeout(int(self._timeout * 1000))
+
+            # Some SQLite pragmas work on a per-connection basis so
+            # apply them all on fresh connection
+            for key, value in self._pragmas.items():
+                con.pragma(key, value)
 
         return con
 
