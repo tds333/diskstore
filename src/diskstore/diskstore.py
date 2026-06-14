@@ -70,8 +70,7 @@ class DiskStore(DiskRead, MutableMapping):
                 ),
                 "DELETE": f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key",
                 "POP": (
-                    f"DELETE FROM {tablename}"
-                    f" WHERE _key = ? RETURNING _key, {fields}"
+                    f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key, {fields}"
                 ),
                 "CLEAR": f"DELETE FROM {tablename};VACUUM;",
                 "POPITEM": (

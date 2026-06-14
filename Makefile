@@ -23,6 +23,15 @@ tests: ## Run tests in all supporte Python versions
 		uv run --isolated -p $$py_v pytest -n auto; \
 	done
 
+.PHONY: update-python
+update-python: ## Reinstall managed Python versions to latest release
+	for py_v in $(PY_VERSIONS); do \
+		uv python install --reinstall $$py_v ; \
+	done
+	uv python install --reinstall 3.14t
+	uv python install --reinstall 3.15
+	uv python install --reinstall 3.15t
+
 .PHONY: latest-tests
 latest-tests: ## Run tests in all supporte Python versions
 	PYTHON_GIL=0 uv run --isolated -p 3.14t pytest -n auto;
