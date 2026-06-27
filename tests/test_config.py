@@ -571,7 +571,11 @@ class TestDataclassConfig:
             flag: bool = True
 
         config = DataclassConfig(DataWithDefaults)
-        assert config.fields == (("name", "TEXT"), ("count", "INTEGER"), ("flag", "INTEGER"))
+        assert config.fields == (
+            ("name", "TEXT"),
+            ("count", "INTEGER"),
+            ("flag", "INTEGER"),
+        )
 
     def test_get_fields_simple(self):
         """Test get_fields extracts field names."""

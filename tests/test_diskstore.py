@@ -892,6 +892,41 @@ def test_query_jsonb_value(store) -> None:
     assert result[0][1] == expected
 
 
+def test_query_limit(store) -> None:
+    for i in range(1, 10):
+        store[f"order#{i}"] = i
+    result = list(store.query(order="rowid ASC", limit=3))
+    assert result == [("order#1", 1), ("order#2", 2), ("order#3", 3)]
+
+
+def test_query_offset(store) -> None:
+    for i in range(1, 10):
+        store[f"order#{i}"] = i
+    result = list(store.query(order="rowid ASC", limit=-1, offset=5))
+    assert result == [("order#6", 6), ("order#7", 7), ("order#8", 8), ("order#9", 9)]
+
+
+def test_query_limit_offset(store) -> None:
+    for i in range(1, 10):
+        store[f"order#{i}"] = i
+    result = list(store.query(order="rowid ASC", limit=3, offset=4))
+    assert result == [("order#5", 5), ("order#6", 6), ("order#7", 7)]
+
+
+def test_query_limit_gt_count(store) -> None:
+    for i in range(1, 4):
+        store[f"order#{i}"] = i
+    result = list(store.query(order="rowid ASC", limit=10))
+    assert result == [("order#1", 1), ("order#2", 2), ("order#3", 3)]
+
+
+def test_query_offset_gt_count(store) -> None:
+    for i in range(1, 4):
+        store[f"order#{i}"] = i
+    result = list(store.query(order="rowid ASC", limit=-1, offset=10))
+    assert result == []
+
+
 def test_pop(store) -> None:
     store["alpha"] = 1
     assert store.pop("alpha") == 1
@@ -1165,7 +1200,9 @@ def test_diskread_pragmas(tmpfilename) -> None:
 
     try:
         for key, value in DEFAULT_RO_PRAGMAS.items():
-            assert reader._con.pragma(key) == value, f"pragma {key} mismatch: {reader._con.pragma(key)} != {value}"
+            assert reader._con.pragma(key) == value, (
+                f"pragma {key} mismatch: {reader._con.pragma(key)} != {value}"
+            )
     finally:
         reader.close()
 

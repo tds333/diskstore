@@ -103,6 +103,21 @@ def test_query_one_value(ro_store) -> None:
     assert result == [(1, "1")]
 
 
+def test_query_limit(ro_store) -> None:
+    result = list(ro_store.query(order="rowid ASC", limit=3))
+    assert result == [(0, "0"), (1, "1"), (2, "2")]
+
+
+def test_query_offset(ro_store) -> None:
+    result = list(ro_store.query(order="rowid ASC", limit=-1, offset=7))
+    assert result == [(7, "7"), (8, "8"), (9, "9")]
+
+
+def test_query_limit_offset(ro_store) -> None:
+    result = list(ro_store.query(order="rowid ASC", limit=2, offset=4))
+    assert result == [(4, "4"), (5, "5")]
+
+
 def test_contains(ro_store) -> None:
     assert 9 in ro_store
 
