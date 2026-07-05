@@ -127,11 +127,9 @@ class DiskStore(DiskRead, MutableMapping):
         migrated_fields = []
         tablename = escape_name(self._config.tablename)
         existing_fileds = set()
-        table_info_stmt = f"PRAGMA table_info({tablename});"
         sql = self._con.execute
-        with closing(sql(table_info_stmt)) as cursor:
-            for row in cursor:
-                existing_fileds.add(row[1])
+        for row in self._con.pragma("table_info", self._config.tablename):
+            existing_fileds.add(row[1])
         for columnname, columntype, default_value in new_fields:
             if columnname not in existing_fileds:
                 name: str = escape_name(columnname)
