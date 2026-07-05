@@ -31,12 +31,8 @@ def escape_name(name: str) -> str:
 
 
 def is_bindable_default(value) -> bool:
-    """Whether *value* can be encoded by apsw as a SQL literal.
-
-    ``None`` is intentionally excluded so ``Optional[T] = None`` does
-    not produce ``DEFAULT NULL`` on a ``NOT NULL`` column.
-    """
-    return isinstance(value, (str, bytes, int, float))
+    """Whether *value* can be encoded by apsw as a SQL literal."""
+    return value is None or isinstance(value, (str, bytes, int, float))
 
 
 class ConfigProtocol(Protocol):

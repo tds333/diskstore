@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from decimal import Decimal
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -228,6 +228,32 @@ class TestDataclassConfig:
         assert isinstance(result.price, Decimal)
         assert result == value
         del store[value.id]
+        store.close()
+
+    def test_nullable_column_from_optional_default(self, tmpfilename) -> None:
+        """Optional[T] = None creates a NULLable column that round-trips None."""
+
+        @dataclass
+        class Note:
+            title: str
+            body: Optional[str] = None
+
+        store = DiskStore(tmpfilename, DataclassConfig(Note))
+
+        info = {row[1]: row for row in
+                store._con.pragma("table_info", store._config.tablename)}
+        assert info["title"][3] == 1
+        assert info["body"][3] == 0
+
+        store["one"] = Note(title="Hi", body=None)
+        result = store["one"]
+        assert result == Note(title="Hi", body=None)
+        assert result.body is None
+
+        store["two"] = Note(title="Hey", body="content")
+        result = store["two"]
+        assert result == Note(title="Hey", body="content")
+
         store.close()
 
 

@@ -138,9 +138,9 @@ class TestIsBindableDefault:
         assert is_bindable_default(3.14)
         assert is_bindable_default(True)
         assert is_bindable_default(False)
+        assert is_bindable_default(None)
 
     def test_not_bindable_types(self):
-        assert not is_bindable_default(None)
         assert not is_bindable_default(Decimal(0))
         assert not is_bindable_default([1, 2, 3])
         assert not is_bindable_default({"a": 1})
@@ -449,7 +449,7 @@ class TestNamedTupleConfig:
 
         fields = {f[0]: f for f in NamedTupleConfig.get_fields(N)}
         assert fields["price"][2] is NO_DEFAULT
-        assert fields["note"][2] is NO_DEFAULT
+        assert fields["note"][2] is None
         assert fields["name"][2] == "bindable"
 
 
@@ -700,7 +700,7 @@ class TestDataclassConfig:
         assert fields["d"][2] is NO_DEFAULT
 
     def test_get_fields_skips_non_bindable_default(self):
-        """Non-bindable defaults (Decimal, None, factory) fall back to NO_DEFAULT."""
+        """Non-bindable defaults (Decimal, factory) fall back to NO_DEFAULT."""
 
         @dataclass
         class D:
@@ -710,7 +710,7 @@ class TestDataclassConfig:
 
         fields = {f[0]: f for f in DataclassConfig.get_fields(D)}
         assert fields["price"][2] is NO_DEFAULT
-        assert fields["note"][2] is NO_DEFAULT
+        assert fields["note"][2] is None
         assert fields["items"][2] is NO_DEFAULT
 
     def test_dump_value(self):

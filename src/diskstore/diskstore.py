@@ -114,12 +114,14 @@ class DiskStore(DiskRead, MutableMapping):
     @staticmethod
     def _get_field_create(field_tuple):
         field_name, field_type, field_default = field_tuple
-        default = ""
-        if field_default is not NO_DEFAULT:
-            default = " DEFAULT " + apsw.format_sql_value(field_default)
+        default = " NOT NULL"
+        if field_default is None:
+            default = " DEFAULT NULL"
+        elif field_default is not NO_DEFAULT:
+            default = " NOT NULL DEFAULT " + apsw.format_sql_value(field_default)
         name = escape_name(field_name)
         type_ = get_sqlite_type(field_type)
-        field_create = f"{name} {type_} NOT NULL{default}"
+        field_create = f"{name} {type_}{default}"
 
         return field_create
 
@@ -132,14 +134,11 @@ class DiskStore(DiskRead, MutableMapping):
             existing_fileds.add(row[1])
         for columnname, columntype, default_value in fields:
             if columnname not in existing_fileds:
-                name: str = escape_name(columnname)
-                type_ = get_sqlite_type(columntype)
-                default = apsw.format_sql_value(default_value)
-                migrated_fields.append((name, type_, default))
-                alter_stmt = (
-                    f"ALTER TABLE {tablename} ADD COLUMN {name}"
-                    f" {type_} NOT NULL DEFAULT {default};"
+                col_def = self._get_field_create(
+                    (columnname, columntype, default_value)
                 )
+                migrated_fields.append((columnname, columntype, default_value))
+                alter_stmt = f"ALTER TABLE {tablename} ADD COLUMN {col_def};"
                 with closing(sql(alter_stmt)):
                     pass
         return migrated_fields
