@@ -72,8 +72,15 @@ class ConfigProtocol(Protocol):
 class BaseConfig(ConfigProtocol):
     """Base default configuratin."""
 
-    def __init__(self, *, tablename=None, key_type=None, timeout=None, pragmas=None,
-                 auto_migrate=None):
+    def __init__(
+        self,
+        *,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
+    ):
         self.tablename = "DiskStore" if tablename is None else tablename
         self.key_type = "BLOB" if key_type is None else get_sqlite_type(key_type)
         self.timeout = TIMEOUT if timeout is None else float(timeout)
@@ -90,13 +97,21 @@ class BaseConfig(ConfigProtocol):
 
 class NamedTupleConfig(BaseConfig):
     def __init__(  # noqa: PLR0913
-        self, value_class, tablename=None, key_type=None, timeout=None,
-        pragmas=None, auto_migrate=None
+        self,
+        value_class,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
     ):
         tablename = value_class.__name__ if not tablename else tablename
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout,
-            pragmas=pragmas, auto_migrate=auto_migrate
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
         )
         self.value_class = value_class
         self.fields = self.get_fields(value_class)
@@ -132,11 +147,20 @@ class NamedTupleConfig(BaseConfig):
 
 
 class JsonConfig(BaseConfig):
-    def __init__(self, tablename=None, key_type=None, timeout=None, pragmas=None,
-                 auto_migrate=None):
+    def __init__(
+        self,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
+    ):
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout,
-            pragmas=pragmas, auto_migrate=auto_migrate
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
         )
         self.fields = (("value", "TEXT", NO_DEFAULT),)
 
@@ -149,13 +173,21 @@ class JsonConfig(BaseConfig):
 
 class DataclassConfig(BaseConfig):
     def __init__(  # noqa: PLR0913
-        self, dataclass, tablename=None, key_type=None, timeout=None,
-        pragmas=None, auto_migrate=None
+        self,
+        dataclass,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
     ):
         tablename = dataclass.__name__ if not tablename else tablename
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout,
-            pragmas=pragmas, auto_migrate=auto_migrate
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
         )
         self.dataclass = dataclass
         self.fields = self.get_fields(dataclass)
@@ -189,13 +221,21 @@ class DataclassConfig(BaseConfig):
 
 class PydanticConfig(BaseConfig):
     def __init__(  # noqa: PLR0913
-        self, model, tablename=None, key_type=None, timeout=None,
-        pragmas=None, auto_migrate=None
+        self,
+        model,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
     ):
         tablename = model.__name__ if not tablename else tablename
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout,
-            pragmas=pragmas, auto_migrate=auto_migrate
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
         )
         self.fields = (("value", "TEXT", NO_DEFAULT),)
         self.model = model

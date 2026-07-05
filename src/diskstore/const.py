@@ -14,6 +14,7 @@ MISSING = object()
 class NO_DEFAULT:  # noqa: N801
     """Sentinel marker for fields without a default value."""
 
+
 DEFAULT_RO_PRAGMAS = {
     "cache_size": 2**13,  # 8,192 pages
     "mmap_size": 2**28,  # 256 MB
