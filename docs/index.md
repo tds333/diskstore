@@ -1,4 +1,6 @@
-# DiskStore — SQLite-backed `MutableMapping` / `Mapping` storage
+# DiskStore 
+
+SQLite-backed `MutableMapping` / `Mapping` storage
 
 Fast disk storage built on top of the [APSW](https://rogerbinns.github.io/apsw/) SQLite
 wrapper.  Keys and values are serialised via a pluggable configuration system
@@ -139,7 +141,7 @@ ro = ds.get_readonly_instance()
 assert "three" in ro
 ```
 
-## `DiskRead` — read-only access
+## `DiskRead` - read-only access
 
 `DiskRead` is a lightweight `Mapping` implementation that opens the database
 read‑only:
@@ -181,9 +183,9 @@ with DiskRead("/tmp/diskstore_bulk.db") as ds:
 
 The config system controls how keys and values are stored in SQLite columns.
 
-### `BaseConfig` — single BLOB column
+### `BaseConfig` - single BLOB column
 
-The default — stores values as raw SQLite BLOBs:
+The default - stores values as raw SQLite BLOBs:
 
 ```python
 from diskstore import DiskStore
@@ -195,7 +197,7 @@ ds["msg"] = "hello"
 assert ds["msg"] == "hello"
 ```
 
-### `JsonConfig` — JSON-serialised TEXT column
+### `JsonConfig` - JSON-serialised TEXT column
 
 ```python
 from diskstore import DiskStore
@@ -207,7 +209,7 @@ ds["nested"] = {"a": [1, 2, 3]}
 assert ds["nested"] == {"a": [1, 2, 3]}
 ```
 
-### `NamedTupleConfig` — one column per field
+### `NamedTupleConfig` - one column per field
 
 ```python
 from typing import NamedTuple
@@ -225,7 +227,7 @@ pt = ds["origin"]
 assert pt.x == 0.0 and pt.y == 0.0
 ```
 
-### `DataclassConfig` — one column per field
+### `DataclassConfig` - one column per field
 
 ```python
 from dataclasses import dataclass
@@ -244,7 +246,7 @@ item = ds["widget"]
 assert item.name == "Widget" and item.price == 9.99
 ```
 
-### `PydanticConfig` — JSON-serialised model column
+### `PydanticConfig` - JSON-serialised model column
 
 ```python
 from pydantic import BaseModel
@@ -277,27 +279,47 @@ Every config class accepts:
 
 ### Table migration
 
-When `auto_migrate=True` (the default), `migrate_table()` is called on every
+When `auto_migrate=True` (the default), `_migrate_table()` is called on every
 first connection per-process.  It creates the table if absent, then adds any
 columns that exist in the config but are missing from the existing table.
-Nullable columns (no default) use `NO_DEFAULT`:
+
+This makes schema evolution seamless - define a new version of your dataclass
+with additional fields and old data is preserved with defaults:
 
 ```python
+from dataclasses import dataclass
 from diskstore import DiskStore
-from diskstore.config import BaseConfig, NO_DEFAULT
+from diskstore.config import DataclassConfig
 
-config = BaseConfig(
-    tablename="items",
-    key_type=int,
-)
-# Override fields for a multi-column schema:
-config.fields = [
-    ("name", "TEXT", "unnamed"),      # NOT NULL DEFAULT 'unnamed'
-    ("description", "TEXT", None),    # DEFAULT NULL
-    ("rating", "INTEGER", NO_DEFAULT),# NOT NULL — must be provided
-]
-ds = DiskStore("/tmp/diskstore_migrate.db", config=config)
-# existing table with fewer columns is automatically extended
+# V1 schema: name + price
+@dataclass
+class ProductV1:
+    name: str
+    price: float
+
+config = DataclassConfig(ProductV1, tablename="products")
+ds = DiskStore("/tmp/diskstore_migrate_dc.db", config=config)
+ds[1] = ProductV1("Widget", 9.99)
+assert ds[1] == ProductV1("Widget", 9.99)
+ds.close()
+
+# V2 schema: adds in_stock with a default
+# auto_migrate=True adds the column automatically
+@dataclass
+class ProductV2:
+    name: str
+    price: float
+    in_stock: bool = True
+
+config_v2 = DataclassConfig(ProductV2, tablename="products")
+ds2 = DiskStore("/tmp/diskstore_migrate_dc.db", config=config_v2)
+
+# Old row gets the default for the new column
+assert ds2[1] == ProductV2("Widget", 9.99, True)
+
+# New rows use both old and new fields
+ds2[2] = ProductV2("Gadget", 24.99, False)
+assert ds2[2] == ProductV2("Gadget", 24.99, False)
 ```
 
 ## Performance notes

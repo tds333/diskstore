@@ -121,11 +121,11 @@ def test_init_filename(tmpfilename):
 
 
 def test_migrate_table_static_create(tmpfilename) -> None:
-    """DiskStore.migrate_table creates the table on a fresh connection."""
+    """DiskStore._migrate_table creates the table on a fresh connection."""
     config = BaseConfig(tablename="fresh")
     store = DiskStore(tmpfilename, config)
     con = store._con
-    DiskStore.migrate_table(con, config)
+    DiskStore._migrate_table(con, config)
     info = list(con.pragma("table_info", config.tablename))
     assert info
     store.close()
@@ -133,6 +133,7 @@ def test_migrate_table_static_create(tmpfilename) -> None:
 
 def test_auto_migrate_from_config(tmpfilename) -> None:
     """Opening a store with new config fields triggers auto-migration."""
+
     class Old(NamedTuple):
         title: str
 
@@ -147,10 +148,9 @@ def test_auto_migrate_from_config(tmpfilename) -> None:
 
     config = NamedTupleConfig(New, tablename="data")
     store = DiskStore(tmpfilename, config)
-    _ = store._con  # triggers migrate_table via auto_migrate
+    _ = store._con  # triggers _migrate_table via auto_migrate
 
-    info = {row[1]: row for row in
-            store._con.pragma("table_info", config.tablename)}
+    info = {row[1]: row for row in store._con.pragma("table_info", config.tablename)}
     assert info["count"][3] == 1
     assert info["note"][3] == 0
 
@@ -160,6 +160,7 @@ def test_auto_migrate_from_config(tmpfilename) -> None:
 
 def test_auto_migrate_disabled(tmpfilename) -> None:
     """auto_migrate=False in config skips migration."""
+
     class Old(NamedTuple):
         title: str
 
@@ -175,8 +176,7 @@ def test_auto_migrate_disabled(tmpfilename) -> None:
     store = DiskStore(tmpfilename, config)
     _ = store._con  # triggers _con, but auto_migrate=False
 
-    info = {row[1] for row in
-            store._con.pragma("table_info", config.tablename)}
+    info = {row[1] for row in store._con.pragma("table_info", config.tablename)}
     assert "count" not in info
     store.close()
 

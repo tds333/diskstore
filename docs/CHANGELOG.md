@@ -3,8 +3,8 @@
 ## 0.3.1 (2026-06-05)
 
 ### Added
-- `DiskStore.migrate_table()` creates the table if absent and adds missing columns via `ALTER TABLE ADD COLUMN` — no destructive migrations
-- `DiskStore` now calls `migrate_table()` on first connection per-process, enabling auto-migration without explicit setup
+- `DiskStore._migrate_table()` creates the table if absent and adds missing columns via `ALTER TABLE ADD COLUMN` — no destructive migrations
+- `DiskStore` now calls `_migrate_table()` on first connection per-process, enabling auto-migration without explicit setup
 - Nullable column support via `NO_DEFAULT` sentinel — columns with no default can be omitted from INSERT
 - `DiskRead` now applies pragmas (e.g. mmap) for read-only connections
 - Default timeout reduced from 30s to 10s for both `DiskStore` and `DiskRead`

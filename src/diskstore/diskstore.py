@@ -97,7 +97,7 @@ class DiskStore(DiskRead, MutableMapping):
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
                 con.pragma(key, value)
-            self.migrate_table(con, self._config)
+            self._migrate_table(con, self._config)
             self._local.con = con
 
         return con
@@ -117,7 +117,7 @@ class DiskStore(DiskRead, MutableMapping):
         return field_create
 
     @staticmethod
-    def migrate_table(con: Connection, config: ConfigProtocol) -> None:
+    def _migrate_table(con: Connection, config: ConfigProtocol) -> None:
         """Ensure the table exists, optionally migrating to match config.fields.
 
         If the table does not exist it is created from *config*.  If
