@@ -43,11 +43,6 @@ def test_init_tablename(store_file) -> None:
     assert dr[0] == "0"
 
 
-# def test_init_value_class(store_file) -> None:
-#     dr = DiskRead(store_file, value_class=Value)
-#     assert dr[0] == "0"
-
-
 def test_init_timeout(store_file) -> None:
     dr = DiskRead(store_file, BaseConfig(timeout=1.0))
     assert dr[0] == "0"

@@ -46,8 +46,6 @@ def store(tmpfilename):
     with DiskStore(tmpfilename) as store:
         yield store
     store.close()
-    # if store.filename and store.filename != ":memory:":
-    #     os.remove(store.filename)
 
 
 def test_init(tmpfilename) -> None:
@@ -74,50 +72,6 @@ def test_init_filename(tmpfilename):
     store = DiskStore(path)
     store.open()
     assert os.path.exists(store.filename)
-
-
-# def test_alter(tmpfilename) -> None:
-#     class MyData(NamedTuple):
-#         name: str
-#         timestamp: float = time.time()
-
-#     # class MyNewData(MyData):
-#     #     label: str = ""
-
-#     class MyNewData(NamedTuple):
-#         name: str
-#         timestamp: float = time.time()
-#         label: str = ""
-#         number: int = 0
-#         offset: float = 1.1
-#         garbage: bytes = b"A"
-
-#     base = DiskStore(tmpfilename, value_class=MyData, tablename="data")
-#     values = []
-#     for i in range(10):
-#         value = MyData(f"my number {i}")
-#         base[i] = value
-#         values.append(value)
-
-#     assert len(values) == len(base)
-#     for key, value in enumerate(values):
-#         assert base[key] == value
-
-#     base_new = DiskStore(
-#         filename=base.filename, value_class=MyNewData, tablename="data"
-#     )
-#     base_new._alter_table()
-#     assert len(values) == len(base_new)
-#     for key, value in enumerate(values):
-#         print(base_new[key])
-#         new_value = MyNewData(*value)
-#         assert base_new[key] == new_value
-#     # old still works (without label)
-#     for key, value in enumerate(values):
-#         print(base[key])
-#         assert base[key] == value
-
-#     base.close()
 
 
 def test_migrate_table_static_create(tmpfilename) -> None:
