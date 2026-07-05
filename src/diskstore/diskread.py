@@ -197,8 +197,8 @@ class DiskRead(Mapping):
         where_ = " WHERE " + where if where else ""
         parameters_ = () if parameters is None else parameters
         order_ = " ORDER BY " + order if order else ""
-        limit_ = " LIMIT " + str(limit) if limit is not None else ""
-        offset_ = " OFFSET " + str(offset) if offset is not None else ""
+        limit_ = " LIMIT " + str(int(limit)) if limit is not None else ""
+        offset_ = " OFFSET " + str(int(offset)) if offset is not None else ""
         select = self._statements["QUERY"] + where_ + order_ + limit_ + offset_
 
         with closing(self._con.execute(select, parameters_)) as cursor:
