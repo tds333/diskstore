@@ -225,6 +225,17 @@ class TestBaseConfig:
         assert config.timeout == 15.0
         assert config.pragmas == {"mode": "memory"}
 
+    def test_init_auto_migrate_default(self):
+        """Test auto_migrate defaults to True."""
+        config = BaseConfig()
+        assert config.auto_migrate is True
+
+    def test_init_auto_migrate_passed(self):
+        """Test auto_migrate can be set to False."""
+        config = BaseConfig(auto_migrate=False)
+        assert config.auto_migrate is False
+        assert BaseConfig(auto_migrate=True).auto_migrate is True
+
     def test_dump_value_single_value(self):
         """Test dump_value returns value as tuple."""
         config = BaseConfig()
@@ -270,6 +281,7 @@ class TestBaseConfig:
         assert hasattr(config, "timeout")
         assert hasattr(config, "pragmas")
         assert hasattr(config, "fields")
+        assert hasattr(config, "auto_migrate")
         assert hasattr(config, "dump_value")
         assert hasattr(config, "load_data")
 

@@ -34,9 +34,11 @@ except ImportError:
 class StructConfig(BaseConfig):
     """Config class for msgspec Structs."""
 
-    def __init__(self, struct, tablename=None, key_type=None, timeout=None, **pragmas):
+    def __init__(self, struct, tablename=None, key_type=None, timeout=None,
+                 auto_migrate=None, **pragmas):
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
+            tablename=tablename, key_type=key_type, timeout=timeout,
+            auto_migrate=auto_migrate, pragmas=pragmas
         )
         self.fields = (("value", "TEXT", NO_DEFAULT),)
         self.struct = struct

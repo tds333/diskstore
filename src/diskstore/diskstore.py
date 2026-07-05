@@ -42,11 +42,7 @@ class DiskStore(DiskRead, MutableMapping):
         self._txn_id = None
         tablename = escape_name(self._config.tablename)
 
-        primary_key_type = get_sqlite_type(self._config.key_type)
         value_columns = self._config.fields
-        fields_create = ", ".join(
-            self._get_field_create(field) for field in self._config.fields
-        )
         fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
         excluded_fields = ", ".join(
             f"{field} = excluded.{escape_name(field)}"
@@ -55,11 +51,6 @@ class DiskStore(DiskRead, MutableMapping):
         qms = ", ".join("?" for field in value_columns)
         self._statements.update(
             {
-                "CREATE": (
-                    f"CREATE TABLE IF NOT EXISTS {tablename} ("
-                    f" _key {primary_key_type} PRIMARY KEY NOT NULL"
-                    f", {fields_create})"
-                ),
                 "SET": (
                     f"INSERT INTO {tablename}(_key, {fields}) VALUES (?, {qms})"
                     f" ON CONFLICT (_key) DO UPDATE SET {excluded_fields}"
@@ -106,7 +97,7 @@ class DiskStore(DiskRead, MutableMapping):
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
                 con.pragma(key, value)
-            con.execute(self._statements["CREATE"])
+            self.migrate_table(con, self._config)
             self._local.con = con
 
         return con
@@ -125,23 +116,48 @@ class DiskStore(DiskRead, MutableMapping):
 
         return field_create
 
-    def _migrate_table(self, fields=()):
-        migrated_fields = []
-        tablename = escape_name(self._config.tablename)
-        existing_fileds = set()
-        sql = self._con.execute
-        for row in self._con.pragma("table_info", self._config.tablename):
-            existing_fileds.add(row[1])
-        for columnname, columntype, default_value in fields:
-            if columnname not in existing_fileds:
-                col_def = self._get_field_create(
-                    (columnname, columntype, default_value)
-                )
-                migrated_fields.append((columnname, columntype, default_value))
-                alter_stmt = f"ALTER TABLE {tablename} ADD COLUMN {col_def};"
-                with closing(sql(alter_stmt)):
-                    pass
-        return migrated_fields
+    @staticmethod
+    def migrate_table(con: Connection, config: ConfigProtocol) -> None:
+        """Ensure the table exists, optionally migrating to match config.fields.
+
+        If the table does not exist it is created from *config*.  If
+        *config.auto_migrate* is true and the table already exists,
+        columns in *config.fields* missing from the table are added.
+
+        Migration uses ``BEGIN IMMEDIATE`` to serialise concurrent
+        callers.
+        """
+        tablename = escape_name(config.tablename)
+        existing = {
+            row[1] for row in (con.pragma("table_info", config.tablename) or [])
+        }
+
+        if not existing:
+            primary_key_type = get_sqlite_type(config.key_type)
+            fields_create = ", ".join(
+                DiskStore._get_field_create(f) for f in config.fields
+            )
+            create_stmt = (
+                f"CREATE TABLE IF NOT EXISTS {tablename} ("
+                f" _key {primary_key_type} PRIMARY KEY NOT NULL"
+                f", {fields_create})"
+            )
+            con.execute(create_stmt)
+        elif config.auto_migrate:
+            config_names = {f[0] for f in config.fields}
+            if config_names - existing:
+                con.execute("BEGIN IMMEDIATE")
+                existing = {
+                    row[1] for row in con.pragma("table_info", config.tablename)
+                }
+                for field_name, field_type, default_value in config.fields:
+                    if field_name not in existing:
+                        col_def = DiskStore._get_field_create(
+                            (field_name, field_type, default_value)
+                        )
+                        alter_stmt = f"ALTER TABLE {tablename} ADD COLUMN {col_def};"
+                        con.execute(alter_stmt)
+                con.execute("COMMIT")
 
     @contextmanager
     def transact(self):

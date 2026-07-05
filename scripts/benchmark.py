@@ -193,6 +193,7 @@ class Benchmark:
     def _run_once(self, dbpath: str):
         value = make_value(self.valsize)
         store = DiskStore(dbpath)
+        store.open()
 
         keys = [f"k{i}" for i in range(self.dbsize)]
         store.update(dict.fromkeys(keys, value))

@@ -120,96 +120,65 @@ def test_init_filename(tmpfilename):
 #     base.close()
 
 
-def test_migrate_table(tmpfilename) -> None:
-    class MyData(NamedTuple):
-        name: str
-        timestamp: float = time.time()
-
-    # class MyNewData(MyData):
-    #     label: str = ""
-
-    class MyNewData(NamedTuple):
-        name: str
-        timestamp: float = time.time()
-        label: str = ""
-        number: int = 0
-        offset: float = 1.1
-        garbage: bytes = b"A"
-
-    base = DiskStore(
-        tmpfilename, NamedTupleConfig(value_class=MyData, tablename="data")
-    )
-    values = []
-    for i in range(10):
-        value = MyData(f"my number {i}")
-        base[i] = value
-        values.append(value)
-
-    assert len(values) == len(base)
-    for key, value in enumerate(values):
-        assert base[key] == value
-
-    base_new = DiskStore(
-        filename=base.filename,
-        config=NamedTupleConfig(value_class=MyNewData, tablename="data"),
-    )
-    new_fields = [
-        ("label", str, ""),
-        ("number", int, 0),
-        ("offset", float, 1.1),
-        ("garbage", bytes, b"A"),
-    ]
-    migrated_fields = base_new._migrate_table(new_fields)
-    print(migrated_fields)
-    assert migrated_fields
-    assert len(values) == len(base_new)
-    for key, value in enumerate(values):
-        print(base_new[key])
-        new_value = MyNewData(*value)
-        assert base_new[key] == new_value
-    # old still works (without label)
-    for key, value in enumerate(values):
-        print(base[key])
-        assert base[key] == value
-
-    migrated_fields = base_new._migrate_table(new_fields)
-    assert not migrated_fields
-    base.close()
-    base_new.close()
+def test_migrate_table_static_create(tmpfilename) -> None:
+    """DiskStore.migrate_table creates the table on a fresh connection."""
+    config = BaseConfig(tablename="fresh")
+    store = DiskStore(tmpfilename, config)
+    con = store._con
+    DiskStore.migrate_table(con, config)
+    info = list(con.pragma("table_info", config.tablename))
+    assert info
+    store.close()
 
 
-def test_migrate_table_on_old(tmpfilename) -> None:
-    class MyData(NamedTuple):
-        name: str
-        timestamp: float = time.time()
+def test_auto_migrate_from_config(tmpfilename) -> None:
+    """Opening a store with new config fields triggers auto-migration."""
+    class Old(NamedTuple):
+        title: str
 
-    base = DiskStore(
-        tmpfilename, NamedTupleConfig(value_class=MyData, tablename="data")
-    )
-    values = []
-    for i in range(10):
-        value = MyData(f"my number {i}")
-        base[i] = value
-        values.append(value)
+    store = DiskStore(tmpfilename, NamedTupleConfig(Old, tablename="data"))
+    store["a"] = Old("hello")
+    store.close()
 
-    assert len(values) == len(base)
-    for key, value in enumerate(values):
-        assert base[key] == value
+    class New(NamedTuple):
+        title: str
+        count: int = 0
+        note: Optional[str] = None
 
-    new_fields = [
-        ("label", str, ""),
-        ("number", int, 0),
-        ("offset", float, 1.1),
-        ("garbage", bytes, b"A"),
-    ]
-    base._migrate_table(new_fields)
-    assert len(values) == len(base)
-    # old still works (without label)
-    for key, value in enumerate(values):
-        print(base[key])
-        assert base[key] == value
+    config = NamedTupleConfig(New, tablename="data")
+    store = DiskStore(tmpfilename, config)
+    _ = store._con  # triggers migrate_table via auto_migrate
 
-    base.close()
+    info = {row[1]: row for row in
+            store._con.pragma("table_info", config.tablename)}
+    assert info["count"][3] == 1
+    assert info["note"][3] == 0
+
+    assert store["a"] == New("hello", 0, None)
+    store.close()
+
+
+def test_auto_migrate_disabled(tmpfilename) -> None:
+    """auto_migrate=False in config skips migration."""
+    class Old(NamedTuple):
+        title: str
+
+    store = DiskStore(tmpfilename, NamedTupleConfig(Old, tablename="data"))
+    store["a"] = Old("hello")
+    store.close()
+
+    class New(NamedTuple):
+        title: str
+        count: int = 0
+
+    config = NamedTupleConfig(New, tablename="data", auto_migrate=False)
+    store = DiskStore(tmpfilename, config)
+    _ = store._con  # triggers _con, but auto_migrate=False
+
+    info = {row[1] for row in
+            store._con.pragma("table_info", config.tablename)}
+    assert "count" not in info
+    store.close()
 
 
 def test_binary(tmpfilename) -> None:

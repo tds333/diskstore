@@ -114,6 +114,8 @@ def worker(num, kind, args, kwargs):
     time.sleep(0.01)  # Let other processes start.
 
     obj = kind(*args, **kwargs)
+    if hasattr(obj, "open"):
+        obj.open()
 
     timings = co.defaultdict(list)
     value = example_data
