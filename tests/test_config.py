@@ -63,6 +63,10 @@ class TestGetSqliteType:
         """Test Python float type converts to REAL."""
         assert get_sqlite_type(float) == "REAL"
 
+    def test_sqlite_type_python_bool(self):
+        """Test Python bool type converts to INTEGER."""
+        assert get_sqlite_type(bool) == "INTEGER"
+
     def test_sqlite_type_python_bytes(self):
         """Test Python bytes type converts to BLOB."""
         assert get_sqlite_type(bytes) == "BLOB"

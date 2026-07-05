@@ -188,6 +188,48 @@ class TestDataclassConfig:
         del store[value.id]
         store.close()
 
+    @pytest.mark.skipif(not HAS_PYDANTIC, reason="pydantic not installed")
+    def test_pydantic_dataclass_with_decimal_roundtrip(self, tmpfilename) -> None:
+        """Test pydantic dataclass with Decimal field round-trips."""
+
+        @pydantic.dataclasses.dataclass
+        class Address:
+            id: str
+            first_name: str
+            last_name: str
+            price: Decimal
+
+        class PydanticDataclassConfig(DataclassConfig):
+            """DataclassConfig that stringifies Decimal on write; relies on
+            pydantic to coerce str -> Decimal on read."""
+
+            def dump_value(self, key, value):
+                return (
+                    key,
+                    value.id,
+                    value.first_name,
+                    value.last_name,
+                    str(value.price),
+                )
+
+            def load_data(self, data):
+                return self.dataclass(data[1], data[2], data[3], data[4])
+
+        value = Address(
+            id=str(uuid.uuid4()),
+            first_name="John",
+            last_name="Doe",
+            price=Decimal("1.50"),
+        )
+        store = DiskStore(tmpfilename, PydanticDataclassConfig(dataclass=Address))
+        store[value.id] = value
+        result = store[value.id]
+        assert isinstance(result, Address)
+        assert isinstance(result.price, Decimal)
+        assert result == value
+        del store[value.id]
+        store.close()
+
 
 # ============================================================================
 # Tests for msgspec Struct
