@@ -10,7 +10,7 @@ Single-package Python library providing fast SQLite-backed `MutableMapping`/`Map
 - **Format**: `uvx ruff format src/`
 - **Type check**: `uvx ty check src/` then `uvx pyrefly check src/` (`ty` call has `-` prefix — its exit code is ignored)
 - **Docs**: `zensical` (mkdocs-compatible), not plain mkdocs. Build with `uv run --group docs zensical build`
-- **Python**: `>=3.10`, default 3.14 (`.python-version`). CI tests 3.10–3.15 including free-threaded (`3.14t`) and pre-release (`3.15`).
+- **Python**: `>=3.10`, default 3.14 (`.python-version`). CI tests 3.10–3.14 including free-threaded (`3.14t`).
 
 ## Commands
 
@@ -46,11 +46,10 @@ uv run pytest tests/test_diskstore_classes.py -n auto -k "Msgspec or Pydantic"
 - **`_con` property** lazy-creates connections per-thread (`threading.local()`). Detects process forks via `os.getpid()` and reconnects.
 - **Transactions** use `BEGIN IMMEDIATE` (not DEFERRED) to avoid deadlocks. Nested `transact()` calls are idempotent.
 - **`DiskStore(key_type=int)`** allows auto-increment via `store.add(None, value)` (SQLite INTEGER PRIMARY KEY NULL → rowid).
-- **`_migrate_table()`** adds columns via `ALTER TABLE ADD COLUMN` — no destructive migrations.
+- **`migrate_table()`** creates the table if absent and adds missing columns via `ALTER TABLE ADD COLUMN` — no destructive migrations.
 - **Benchmark scripts** use PEP 723 inline script metadata (see `scripts/benchmark_core.py`).
 - **Tests with pytest.mark.skipif**: `TestMsgspecStruct`, `TestPydanticModel` — conditional on optional deps.
 - **`test_docs.py`** uses `pytest-examples` to validate docstring examples in `docs/index.md`. Run separately if docs fail.
-- **Editor**: `.vscode/settings.json` exists — check before overriding.
 
 ## Rules
 
