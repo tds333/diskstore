@@ -75,7 +75,6 @@ class DiskRead(Mapping):
 
         """
         filename = os.path.expanduser(filename)
-        filename = os.path.expandvars(filename)
         self._filename = os.fspath(filename)
         self._config: ConfigProtocol = BaseConfig() if config is None else config
         self._timeout: float = (
