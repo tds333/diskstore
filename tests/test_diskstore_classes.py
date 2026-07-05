@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 
 from diskstore import DiskStore
-from diskstore.config import BaseConfig, DataclassConfig, PydanticConfig
+from diskstore.config import NO_DEFAULT, BaseConfig, DataclassConfig, PydanticConfig
 
 # Check for optional dependencies
 try:
@@ -38,7 +38,7 @@ class StructConfig(BaseConfig):
         super().__init__(
             tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
         )
-        self.fields = (("value", "TEXT"),)
+        self.fields = (("value", "TEXT", NO_DEFAULT),)
         self.struct = struct
 
     def dump_value(self, key, value) -> Sequence:
@@ -55,7 +55,7 @@ class KeyFromValueConfig(BaseConfig):
 
     def __init__(self, *, key_type=None, **kwargs):
         super().__init__(key_type=key_type, **kwargs)
-        self.fields = (("value", "TEXT"),)
+        self.fields = (("value", "TEXT", NO_DEFAULT),)
 
     def dump_value(self, key, value) -> Sequence:
         if key is None:
@@ -165,7 +165,7 @@ class TestDataclassConfig:
                     timeout=timeout,
                     **pragmas,
                 )
-                self.fields = (("value", "TEXT"),)
+                self.fields = (("value", "TEXT", NO_DEFAULT),)
 
             def dump_value(self, key, value):
                 d = asdict(value)

@@ -19,7 +19,7 @@ from typing import Any, Iterable
 import apsw
 
 from .config import ConfigProtocol, escape_name, get_sqlite_type
-from .const import DEFAULT_PRAGMAS, MISSING, KeyType
+from .const import DEFAULT_PRAGMAS, MISSING, NO_DEFAULT, KeyType
 from .diskread import DiskRead
 
 Connection = apsw.Connection
@@ -113,24 +113,24 @@ class DiskStore(DiskRead, MutableMapping):
 
     @staticmethod
     def _get_field_create(field_tuple):
-        field_name, field_type, *field_default = field_tuple
+        field_name, field_type, field_default = field_tuple
         default = ""
-        if field_default and field_default[0] is not None:
-            default = " DEFAULT " + apsw.format_sql_value(field_default[0])
+        if field_default is not NO_DEFAULT:
+            default = " DEFAULT " + apsw.format_sql_value(field_default)
         name = escape_name(field_name)
         type_ = get_sqlite_type(field_type)
         field_create = f"{name} {type_} NOT NULL{default}"
 
         return field_create
 
-    def _migrate_table(self, new_fields=()):
+    def _migrate_table(self, fields=()):
         migrated_fields = []
         tablename = escape_name(self._config.tablename)
         existing_fileds = set()
         sql = self._con.execute
         for row in self._con.pragma("table_info", self._config.tablename):
             existing_fileds.add(row[1])
-        for columnname, columntype, default_value in new_fields:
+        for columnname, columntype, default_value in fields:
             if columnname not in existing_fileds:
                 name: str = escape_name(columnname)
                 type_ = get_sqlite_type(columntype)
@@ -140,7 +140,7 @@ class DiskStore(DiskRead, MutableMapping):
                     f"ALTER TABLE {tablename} ADD COLUMN {name}"
                     f" {type_} NOT NULL DEFAULT {default};"
                 )
-                with closing(sql(alter_stmt)) as cursor:
+                with closing(sql(alter_stmt)):
                     pass
         return migrated_fields
 

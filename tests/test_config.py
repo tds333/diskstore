@@ -9,6 +9,7 @@ from typing import NamedTuple, Optional
 import pytest
 
 from diskstore.config import (
+    NO_DEFAULT,
     BaseConfig,
     DataclassConfig,
     JsonConfig,
@@ -16,6 +17,7 @@ from diskstore.config import (
     PydanticConfig,
     escape_name,
     get_sqlite_type,
+    is_bindable_default,
 )
 from diskstore.const import TIMEOUT
 
@@ -122,6 +124,30 @@ class TestEscapeName:
 
 
 # ============================================================================
+# Tests for is_bindable_default
+# ============================================================================
+
+
+class TestIsBindableDefault:
+    """Test is_bindable_default helper."""
+
+    def test_bindable_types(self):
+        assert is_bindable_default("str")
+        assert is_bindable_default(b"bytes")
+        assert is_bindable_default(42)
+        assert is_bindable_default(3.14)
+        assert is_bindable_default(True)
+        assert is_bindable_default(False)
+
+    def test_not_bindable_types(self):
+        assert not is_bindable_default(None)
+        assert not is_bindable_default(Decimal(0))
+        assert not is_bindable_default([1, 2, 3])
+        assert not is_bindable_default({"a": 1})
+        assert not is_bindable_default(NO_DEFAULT)
+
+
+# ============================================================================
 # Tests for BaseConfig
 # ============================================================================
 
@@ -136,7 +162,7 @@ class TestBaseConfig:
         assert config.key_type == "BLOB"
         assert config.timeout == TIMEOUT
         assert config.pragmas == {}
-        assert config.fields == [("value", "BLOB")]
+        assert config.fields == [("value", "BLOB", NO_DEFAULT)]
 
     def test_init_custom_tablename(self):
         """Test BaseConfig with custom tablename."""
@@ -301,9 +327,9 @@ class TestNamedTupleConfig:
         fields_dict = {f[0]: f for f in config.fields}
         # Fields without defaults still have default=None in the tuple
         assert len(fields_dict["a"]) == 3
-        assert fields_dict["a"][2] is None
+        assert fields_dict["a"][2] is NO_DEFAULT
         assert len(fields_dict["b"]) == 3
-        assert fields_dict["b"][2] is None
+        assert fields_dict["b"][2] is NO_DEFAULT
 
     def test_get_fields_types(self):
         """Test field type detection."""
@@ -413,6 +439,19 @@ class TestNamedTupleConfig:
         config = NamedTupleConfig(Value, pragmas=pragmas)
         assert config.pragmas == pragmas
 
+    def test_get_fields_skips_non_bindable_default(self):
+        """Non-bindable defaults fall back to NO_DEFAULT."""
+
+        class N(NamedTuple):
+            price: Decimal = Decimal(0)
+            note: Optional[str] = None
+            name: str = "bindable"
+
+        fields = {f[0]: f for f in NamedTupleConfig.get_fields(N)}
+        assert fields["price"][2] is NO_DEFAULT
+        assert fields["note"][2] is NO_DEFAULT
+        assert fields["name"][2] == "bindable"
+
 
 # ============================================================================
 # Tests for JsonConfig
@@ -427,7 +466,7 @@ class TestJsonConfig:
         config = JsonConfig()
         assert config.tablename == "DiskStore"
         assert config.key_type == "BLOB"
-        assert config.fields == (("value", "TEXT"),)
+        assert config.fields == (("value", "TEXT", NO_DEFAULT),)
 
     def test_init_custom_tablename(self):
         """Test JsonConfig with custom tablename."""
@@ -553,7 +592,10 @@ class TestDataclassConfig:
         config = DataclassConfig(SimpleData)
         assert config.tablename == "SimpleData"
         assert config.dataclass == SimpleData
-        assert config.fields == (("name", "TEXT"), ("count", "INTEGER"))
+        assert config.fields == (
+            ("name", "TEXT", NO_DEFAULT),
+            ("count", "INTEGER", NO_DEFAULT),
+        )
 
     def test_init_custom_tablename(self):
         """Test DataclassConfig with custom tablename."""
@@ -576,9 +618,9 @@ class TestDataclassConfig:
 
         config = DataclassConfig(DataWithDefaults)
         assert config.fields == (
-            ("name", "TEXT"),
-            ("count", "INTEGER"),
-            ("flag", "INTEGER"),
+            ("name", "TEXT", NO_DEFAULT),
+            ("count", "INTEGER", 0),
+            ("flag", "INTEGER", True),
         )
 
     def test_get_fields_simple(self):
@@ -591,7 +633,11 @@ class TestDataclassConfig:
             c: float
 
         fields = DataclassConfig.get_fields(Data)
-        assert fields == (("a", "TEXT"), ("b", "INTEGER"), ("c", "REAL"))
+        assert fields == (
+            ("a", "TEXT", NO_DEFAULT),
+            ("b", "INTEGER", NO_DEFAULT),
+            ("c", "REAL", NO_DEFAULT),
+        )
 
     def test_get_fields_non_dataclass_raises(self):
         """Test get_fields raises for non-dataclass."""
@@ -623,7 +669,7 @@ class TestDataclassConfig:
             floating: float
             data: bytes
 
-        types = [t for _, t in DataclassConfig.get_fields(TypedData)]
+        types = [t for _, t, _ in DataclassConfig.get_fields(TypedData)]
         assert tuple(types) == ("TEXT", "INTEGER", "REAL", "BLOB")
 
     def test_get_field_types_no_annotations(self):
@@ -634,8 +680,38 @@ class TestDataclassConfig:
             field1: str
             field2: int
 
-        types = [t for _, t in DataclassConfig.get_fields(UnannotatedData)]
+        types = [t for _, t, _ in DataclassConfig.get_fields(UnannotatedData)]
         assert tuple(types) == ("TEXT", "INTEGER")
+
+    def test_get_fields_extracts_static_defaults(self):
+        """Static defaults are extracted; factory defaults are skipped."""
+
+        @dataclass
+        class D:
+            a: str
+            b: int = 0
+            c: bool = True
+            d: list = field(default_factory=list)
+
+        fields = {f[0]: f for f in DataclassConfig.get_fields(D)}
+        assert fields["a"][2] is NO_DEFAULT
+        assert fields["b"][2] == 0
+        assert fields["c"][2] is True
+        assert fields["d"][2] is NO_DEFAULT
+
+    def test_get_fields_skips_non_bindable_default(self):
+        """Non-bindable defaults (Decimal, None, factory) fall back to NO_DEFAULT."""
+
+        @dataclass
+        class D:
+            price: Decimal = Decimal(0)
+            note: Optional[str] = None
+            items: list = field(default_factory=list)
+
+        fields = {f[0]: f for f in DataclassConfig.get_fields(D)}
+        assert fields["price"][2] is NO_DEFAULT
+        assert fields["note"][2] is NO_DEFAULT
+        assert fields["items"][2] is NO_DEFAULT
 
     def test_dump_value(self):
         """Test dump_value returns tuple of field values."""
@@ -735,7 +811,10 @@ class TestDataclassConfig:
             items: list = field(default_factory=list)
 
         config = DataclassConfig(DataWithList)
-        assert config.fields == (("name", "TEXT"), ("items", "BLOB"))
+        assert config.fields == (
+            ("name", "TEXT", NO_DEFAULT),
+            ("items", "BLOB", NO_DEFAULT),
+        )
 
     def test_init_non_dataclass_raises(self):
         """Test DataclassConfig raises for non-dataclass."""
@@ -766,7 +845,7 @@ class TestPydanticConfig:
         config = PydanticConfig(SimpleModel)
         assert config.tablename == "SimpleModel"
         assert config.model == SimpleModel
-        assert config.fields == (("value", "TEXT"),)
+        assert config.fields == (("value", "TEXT", NO_DEFAULT),)
 
     def test_init_custom_tablename(self):
         """Test PydanticConfig with custom tablename."""
@@ -965,7 +1044,15 @@ class TestConfigEdgeCases:
 
         config = DataclassConfig(PriceData)
         # Decimal is not a standard type, will default to BLOB
-        assert config.fields == (("name", "TEXT"), ("price", "BLOB"))
+        assert config.fields == (
+            ("name", "TEXT", NO_DEFAULT),
+            ("price", "BLOB", NO_DEFAULT),
+        )
+
+    def test_no_default_sentinel(self):
+        """Test NO_DEFAULT sentinel properties."""
+        assert isinstance(NO_DEFAULT, type)
+        assert "NO_DEFAULT" in repr(NO_DEFAULT)
 
     def test_config_pickling(self):
         """Test BaseConfig can be pickled."""
@@ -974,3 +1061,4 @@ class TestConfigEdgeCases:
         unpickled = pickle.loads(pickled)
         assert unpickled.tablename == config.tablename
         assert unpickled.timeout == config.timeout
+        assert unpickled.fields == config.fields

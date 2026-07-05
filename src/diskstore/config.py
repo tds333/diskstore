@@ -6,7 +6,7 @@ from abc import abstractmethod
 from collections.abc import Sequence
 from typing import Any, Iterable, Protocol
 
-from .const import TIMEOUT, AnyLite, KeyType
+from .const import NO_DEFAULT, TIMEOUT, AnyLite, KeyType
 
 
 def get_sqlite_type(type_) -> str:
@@ -30,6 +30,15 @@ def escape_name(name: str) -> str:
     return tablename
 
 
+def is_bindable_default(value) -> bool:
+    """Whether *value* can be encoded by apsw as a SQL literal.
+
+    ``None`` is intentionally excluded so ``Optional[T] = None`` does
+    not produce ``DEFAULT NULL`` on a ``NOT NULL`` column.
+    """
+    return isinstance(value, (str, bytes, int, float))
+
+
 class ConfigProtocol(Protocol):
     """Configuration Protocol
 
@@ -39,7 +48,8 @@ class ConfigProtocol(Protocol):
         timeout: Timeout used to wait if someone blocks connections or with writes
         pragmas: Dictionary with PRAGMAs to set when connections is initialized
         fields: Iterable used for select, update and create statement with
-            field name, type and default. `[("value", str), ("value2", int, 0)]`
+            field name, type, default.
+            ``[("value", str, NO_DEFAULT), ("value2", int, 0)]``
 
     """
 
@@ -70,7 +80,7 @@ class BaseConfig(ConfigProtocol):
         self.key_type = "BLOB" if key_type is None else get_sqlite_type(key_type)
         self.timeout = TIMEOUT if timeout is None else float(timeout)
         self.pragmas = {} if pragmas is None else pragmas
-        self.fields = [("value", "BLOB")]
+        self.fields = [("value", "BLOB", NO_DEFAULT)]
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
         return (key, value)
@@ -101,7 +111,9 @@ class NamedTupleConfig(BaseConfig):
         for name in value_columns:
             type_cls = type_annotations.get(name, bytes)  # types are optional
             sqlite_type = get_sqlite_type(type_cls)
-            default = value_column_defaults.get(name)
+            default = value_column_defaults.get(name, NO_DEFAULT)
+            if not is_bindable_default(default):
+                default = NO_DEFAULT
             fields.append((name, sqlite_type, default))
         if "_key" in value_columns:
             raise ValueError(
@@ -123,7 +135,7 @@ class JsonConfig(BaseConfig):
         super().__init__(
             tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
         )
-        self.fields = (("value", "TEXT"),)
+        self.fields = (("value", "TEXT", NO_DEFAULT),)
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
         return (key, json.dumps(value))
@@ -153,10 +165,14 @@ class DataclassConfig(BaseConfig):
             raise ValueError("Name _key is not allowed as attribute for dataclass.")
         type_annotations = getattr(dataclass, "__annotations__", {}) or {}
         fields = []
-        for name in value_columns:
-            type_cls = type_annotations.get(name, bytes)
+        for f in dc_fields:
+            type_cls = type_annotations.get(f.name, bytes)
             sqlite_type = get_sqlite_type(type_cls)
-            fields.append((name, sqlite_type))
+            if f.default is not dataclasses.MISSING and is_bindable_default(f.default):
+                default = f.default
+            else:
+                default = NO_DEFAULT
+            fields.append((f.name, sqlite_type, default))
         return tuple(fields)
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
@@ -174,7 +190,7 @@ class PydanticConfig(BaseConfig):
         super().__init__(
             tablename=tablename, key_type=key_type, timeout=timeout, pragmas=pragmas
         )
-        self.fields = (("value", "TEXT"),)
+        self.fields = (("value", "TEXT", NO_DEFAULT),)
         self.model = model
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
