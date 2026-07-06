@@ -147,7 +147,11 @@ assert "three" in ro
 read‑only:
 
 ```python
-from diskstore import DiskRead
+from diskstore import DiskRead, DiskStore
+from diskstore.config import BaseConfig
+
+with DiskStore("/tmp/diskstore_autoinc.db", config=BaseConfig(key_type=int)) as wds:
+    wds.add(None, "auto-generated")
 
 # context-manager support (opens and closes the connection)
 with DiskRead("/tmp/diskstore_autoinc.db") as ds:
@@ -161,18 +165,24 @@ with DiskRead("/tmp/diskstore_autoinc.db") as ds:
 `DiskRead.query()` supports `WHERE`, `ORDER BY`, `LIMIT` and `OFFSET`:
 
 ```python
-from diskstore import DiskRead
+from diskstore import DiskRead, DiskStore
+
+with DiskStore("/tmp/diskstore_bulk.db") as wds:
+    wds.update({i: str(i) for i in range(10)})
 
 with DiskRead("/tmp/diskstore_bulk.db") as ds:
-    results = list(ds.query(where="_key > ?", parameters=(50,), limit=5))
-    assert len(results) == 5
-    assert results[0][0] == 51
+    results = list(ds.query(where="_key > ?", parameters=(5,), limit=3))
+    assert len(results) == 3
+    assert results[0][0] == 6
 ```
 
 Reversed iteration:
 
 ```python
-from diskstore import DiskRead
+from diskstore import DiskRead, DiskStore
+
+with DiskStore("/tmp/diskstore_bulk.db") as wds:
+    wds.update({i: str(i) for i in range(3)})
 
 with DiskRead("/tmp/diskstore_bulk.db") as ds:
     keys = list(reversed(ds))
