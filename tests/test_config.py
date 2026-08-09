@@ -15,6 +15,7 @@ from diskstore.config import (
     JsonConfig,
     NamedTupleConfig,
     PydanticConfig,
+    StructtypeConfig,
     escape_name,
     get_sqlite_type,
     is_bindable_default,
@@ -28,6 +29,14 @@ try:
     HAS_PYDANTIC = True
 except ImportError:
     HAS_PYDANTIC = False
+
+# Check if structtype is available (optional)
+try:
+    import structtype
+
+    HAS_STRUCTTYPE = True
+except ImportError:
+    HAS_STRUCTTYPE = False
 
 # ============================================================================
 # Tests for utility functions
@@ -956,6 +965,132 @@ class TestPydanticConfig:
         invalid_json = json.dumps({"count": "not_an_int"})
         with pytest.raises(pydantic.ValidationError):
             config.load_data((0, invalid_json))
+
+
+# ============================================================================
+# Tests for StructtypeConfig (with structtype)
+# ============================================================================
+
+
+@pytest.mark.skipif(not HAS_STRUCTTYPE, reason="structtype not installed")
+class TestStructtypeConfig:
+    """Test StructtypeConfig class."""
+
+    def test_init_struct_model(self):
+        """Test StructtypeConfig with structtype Struct."""
+
+        class Point(structtype.Struct):
+            x: int
+            y: int
+
+        config = StructtypeConfig(Point)
+        assert config.tablename == "Point"
+        assert config.struct == Point
+        assert config.fields == (("value", "BLOB", NO_DEFAULT),)
+
+    def test_init_custom_tablename(self):
+        """Test StructtypeConfig with custom tablename."""
+
+        class Point(structtype.Struct):
+            x: int
+            y: int
+
+        config = StructtypeConfig(Point, tablename="CustomTable")
+        assert config.tablename == "CustomTable"
+
+    def test_dump_value(self):
+        """Test dump_value serializes struct to JSON bytes."""
+
+        class Point(structtype.Struct):
+            x: int
+            y: int
+
+        config = StructtypeConfig(Point)
+        value = Point(x=1, y=2)
+        result = config.dump_value(0, value)
+        assert len(result) == 2
+        assert isinstance(result[1], bytes)
+
+    def test_load_data(self):
+        """Test load_data deserializes JSON bytes to struct."""
+
+        class Point(structtype.Struct):
+            x: int
+            y: int
+
+        config = StructtypeConfig(Point)
+        data = (0, Point(x=1, y=2).struct_dump_json())
+        result = config.load_data(data)
+        assert isinstance(result, Point)
+        assert result == Point(x=1, y=2)
+
+    def test_roundtrip(self):
+        """Test dump_value -> load_data roundtrip."""
+
+        class Complex(structtype.Struct):
+            text: str
+            number: int
+            floating: float
+
+        config = StructtypeConfig(Complex)
+        original = Complex(text="hello", number=123, floating=45.67)
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
+        assert loaded == original
+
+    def test_roundtrip_nested(self):
+        """Test roundtrip with nested struct."""
+
+        class Inner(structtype.Struct):
+            a: int
+
+        class Outer(structtype.Struct):
+            inner: Inner
+
+        config = StructtypeConfig(Outer)
+        original = Outer(inner=Inner(a=1))
+        dumped = config.dump_value(0, original)
+        loaded = config.load_data(dumped)
+        assert loaded == original
+
+    def test_validation_error_on_load(self):
+        """Test structtype validation is applied on load."""
+
+        class Point(structtype.Struct):
+            x: int
+            y: int
+
+        config = StructtypeConfig(Point)
+        with pytest.raises(structtype.ValidationError):
+            config.load_data((0, b'{"x": "no", "y": 2}'))
+
+    def test_key_type_parameter(self):
+        """Test key_type parameter is passed through."""
+
+        class Point(structtype.Struct):
+            v: str
+
+        config = StructtypeConfig(Point, key_type=int)
+        assert config.key_type == "INTEGER"
+
+    def test_timeout_parameter(self):
+        """Test timeout parameter is passed through."""
+
+        class Point(structtype.Struct):
+            v: str
+
+        config = StructtypeConfig(Point, timeout=20.0)
+        assert config.timeout == 20.0
+
+    def test_pragmas_parameter(self):
+        """Test pragmas parameter is passed through."""
+
+        class Point(structtype.Struct):
+            v: str
+
+        pragmas = {"mode": "wal"}
+        config = StructtypeConfig(Point, pragmas=pragmas)
+        assert config.pragmas == pragmas
 
 
 # ============================================================================

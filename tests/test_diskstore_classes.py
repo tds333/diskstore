@@ -13,7 +13,13 @@ from typing import Any, Optional
 import pytest
 
 from diskstore import DiskStore
-from diskstore.config import NO_DEFAULT, BaseConfig, DataclassConfig, PydanticConfig
+from diskstore.config import (
+    NO_DEFAULT,
+    BaseConfig,
+    DataclassConfig,
+    PydanticConfig,
+    StructtypeConfig,
+)
 
 # Check for optional dependencies
 try:
@@ -30,15 +36,32 @@ try:
 except ImportError:
     HAS_PYDANTIC = False
 
+try:
+    import structtype
 
-class StructConfig(BaseConfig):
+    HAS_STRUCTTYPE = True
+except ImportError:
+    HAS_STRUCTTYPE = False
+
+
+class MsgspecStructConfig(BaseConfig):
     """Config class for msgspec Structs."""
 
-    def __init__(self, struct, tablename=None, key_type=None, timeout=None,
-                 auto_migrate=None, **pragmas):
+    def __init__(
+        self,
+        struct,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        auto_migrate=None,
+        **pragmas,
+    ):
         super().__init__(
-            tablename=tablename, key_type=key_type, timeout=timeout,
-            auto_migrate=auto_migrate, pragmas=pragmas
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            auto_migrate=auto_migrate,
+            pragmas=pragmas,
         )
         self.fields = (("value", "TEXT", NO_DEFAULT),)
         self.struct = struct
@@ -242,8 +265,10 @@ class TestDataclassConfig:
 
         store = DiskStore(tmpfilename, DataclassConfig(Note))
 
-        info = {row[1]: row for row in
-                store._con.pragma("table_info", store._config.tablename)}
+        info = {
+            row[1]: row
+            for row in store._con.pragma("table_info", store._config.tablename)
+        }
         assert info["title"][3] == 1
         assert info["body"][3] == 0
 
@@ -287,7 +312,7 @@ class TestMsgspecStruct:
             plz=77777,
             city="Bonn",
         )
-        store = DiskStore(tmpfilename, StructConfig(Address))
+        store = DiskStore(tmpfilename, MsgspecStructConfig(Address))
         store[value.id] = value
         result = store[value.id]
         assert isinstance(result, Address)
@@ -303,7 +328,7 @@ class TestMsgspecStruct:
             name: str
             age: int
 
-        store = DiskStore(tmpfilename, StructConfig(Person))
+        store = DiskStore(tmpfilename, MsgspecStructConfig(Person))
 
         people = [
             Person(id="1", name="Alice", age=30),
@@ -403,5 +428,86 @@ class TestPydanticModel:
             result = store[user.id]
             assert result == user
             assert isinstance(result, User)
+
+        store.close()
+
+
+# ============================================================================
+# Tests for structtype Struct
+# ============================================================================
+
+
+@pytest.mark.skipif(not HAS_STRUCTTYPE, reason="structtype not installed")
+class TestStructtypeStruct:
+    """Test DiskStore with structtype Struct and StructtypeConfig."""
+
+    def test_structtype_roundtrip(self, tmpfilename) -> None:
+        """Test saving and loading structtype Struct."""
+
+        class Address(structtype.Struct):
+            id: str
+            first_name: str
+            last_name: str
+            street: str
+            plz: int
+            city: str
+
+        value = Address(
+            id=str(uuid.uuid4()),
+            first_name="John",
+            last_name="Doe",
+            street="Mainstreet 1",
+            plz=77777,
+            city="Bonn",
+        )
+        store = DiskStore(tmpfilename, StructtypeConfig(Address))
+        store[value.id] = value
+        result = store[value.id]
+        assert isinstance(result, Address)
+        assert result == value
+        del store[value.id]
+        store.close()
+
+    def test_structtype_multiple_records(self, tmpfilename) -> None:
+        """Test handling multiple structtype Struct records."""
+
+        class Person(structtype.Struct):
+            id: str
+            name: str
+            age: int
+
+        store = DiskStore(tmpfilename, StructtypeConfig(Person))
+
+        people = [
+            Person(id="1", name="Alice", age=30),
+            Person(id="2", name="Bob", age=25),
+            Person(id="3", name="Charlie", age=35),
+        ]
+
+        for person in people:
+            store[person.id] = person
+
+        for person in people:
+            result = store[person.id]
+            assert result == person
+            assert isinstance(result, Person)
+
+        store.close()
+
+    def test_structtype_query_json_attribute(self, tmpfilename) -> None:
+        """Test querying a structtype JSON attribute via query()."""
+
+        class Item(structtype.Struct):
+            id: str
+            name: str
+            count: int
+
+        store = DiskStore(tmpfilename, StructtypeConfig(Item))
+        for i in range(1, 100):
+            store[str(i)] = Item(id=str(i), name=f"item {i}", count=i)
+
+        result = list(store.query(where="value->>'$.count' = 50"))
+        assert result
+        assert result[0][1] == Item(id="50", name="item 50", count=50)
 
         store.close()

@@ -275,6 +275,25 @@ assert task.title == "Write docs"
 assert task.done is False
 ```
 
+### `StructtypeConfig` - JSON-serialised BLOB column
+
+```python
+from structtype import Struct
+from diskstore import DiskStore
+from diskstore.config import StructtypeConfig
+
+class Task(Struct):
+    title: str
+    done: bool = False
+
+config = StructtypeConfig(Task, key_type=str)
+ds = DiskStore("/tmp/diskstore_config_st.db", config=config)
+ds["task1"] = Task(title="Write docs")
+task = ds["task1"]
+assert task.title == "Write docs"
+assert task.done is False
+```
+
 ### Configuration options
 
 Every config class accepts:

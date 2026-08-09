@@ -15,7 +15,8 @@ dev = [
   "pytest-asyncio>=1.3.0",
   "pytest-cov",
   "pytest-examples>=0.0.18",
-  "pytest-xdist"
+  "pytest-xdist",
+  "structtype>=0.3.0",
 ]
 docs = [
   "mkdocstrings[python]>=1.0.3",

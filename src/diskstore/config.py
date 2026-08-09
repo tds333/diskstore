@@ -245,3 +245,31 @@ class PydanticConfig(BaseConfig):
 
     def load_data(self, data: tuple) -> Any:
         return self.model.model_validate_json(data[1])
+
+
+class StructtypeConfig(BaseConfig):
+    def __init__(  # noqa: PLR0913, PLR0917
+        self,
+        struct,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
+    ):
+        tablename = struct.__name__ if not tablename else tablename
+        super().__init__(
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
+        )
+        self.fields = (("value", "BLOB", NO_DEFAULT),)
+        self.struct = struct
+
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        return (key, value.struct_dump_json())
+
+    def load_data(self, data: tuple) -> Any:
+        return self.struct.struct_validate_json(data[1])

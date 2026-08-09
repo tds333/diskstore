@@ -68,6 +68,10 @@ bench-kv: ## run benchmarks kv
 bench-all: ## run benchmark (get/set/delete/update)
 	uv run scripts/benchmark.py
 
+.PHONY: bench-configs
+bench-configs: ## run benchmark (BaseConfig vs StructtypeConfig vs PydanticConfig)
+	uv run scripts/benchmark_configs.py
+
 .PHONY: docs
 docs: ## build docs
 	uv run --group docs zensical build
