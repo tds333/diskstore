@@ -8,6 +8,7 @@
 
 ### Changed
 - Documentation overhaul with self-contained examples
+- Relicensed from Apache-2.0 OR MIT to BSD-3-Clause
 
 ### Removed
 - `scripts/test_diskcache.py`

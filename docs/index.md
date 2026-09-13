@@ -371,7 +371,7 @@ Benchmark scripts are available at `scripts/benchmark_core.py`.
 
 ## License
 
-Copyright 2025–2026 Wolfgang Langner
+`DiskStore` is distributed under the terms of the
+[BSD-3-Clause](https://spdx.org/licenses/BSD-3-Clause.html) license.
 
-Licensed under the Apache License, Version 2.0 or the MIT license; you may
-not use this file except in compliance with one of these licences.
+Copyright 2025-2026 Wolfgang Langner
