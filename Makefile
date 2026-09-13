@@ -8,8 +8,8 @@ export UV_MANAGED_PYTHON ?= 1
 build: ## Build
 	uv build
 
-.PHONY: cov
-cov: ## Run tests with coverage
+.PHONY: test-cov
+test-cov: ## Run tests with coverage
 	uv run pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=diskstore
 
 ##@ Quality
@@ -17,8 +17,8 @@ cov: ## Run tests with coverage
 test: ## Run tests in current Python
 	uv run pytest --lf -n auto
 
-.PHONY: tests
-tests: ## Run tests in all supporte Python versions
+.PHONY: test-all
+test-all: ## Run tests in all supporte Python versions
 	for py_v in $(PY_VERSIONS); do \
 		uv run --isolated -p $$py_v pytest -n auto; \
 	done
@@ -32,8 +32,8 @@ update-python: ## Reinstall managed Python versions to latest release
 	uv python install --reinstall 3.15
 	uv python install --reinstall 3.15t
 
-.PHONY: latest-tests
-latest-tests: ## Run tests in all supporte Python versions
+.PHONY: test-latest
+test-latest: ## Run tests in all supporte Python versions
 	PYTHON_GIL=0 uv run --isolated -p 3.14t pytest -n auto;
 	uv run --pre --isolated -p 3.15 pytest -n auto;
 	PYTHON_GIL=0 uv run --pre --isolated -p 3.15t pytest -n auto;

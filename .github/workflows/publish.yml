@@ -1,12 +1,16 @@
 name: publish
 
 on:
-  release:
-    types:
-      - created
+  push:
+    tags:
+      - 'v*.*.*'
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
   publish:
+    needs: test
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -14,10 +18,9 @@ jobs:
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: Set up uv & Python
-        # uses: actions/setup-python@v4
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.1.0
         with:
           python-version: "3.14"
       - name: Build distribution

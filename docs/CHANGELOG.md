@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.2 (unreleased)
+
+### Added
+- `StructtypeConfig` — optional config class backed by `structtype` for fast, schema-validated serialization
+- Python 3.15 test coverage
+
+### Changed
+- Documentation overhaul with self-contained examples
+
+### Removed
+- `scripts/test_diskcache.py`
+
 ## 0.3.1 (2026-06-05)
 
 ### Added
