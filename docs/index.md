@@ -294,6 +294,31 @@ assert task.title == "Write docs"
 assert task.done is False
 ```
 
+### `StructtypeArrayConfig` - top-level fields as columns
+
+For structs defined with `array_like=True`, every top-level field is stored
+in its own SQLite column instead of a single JSON blob, so fields can be
+queried and indexed directly. Basic field types (`int`, `float`, `str`,
+`bytes`, `bool`) are stored natively, while nested `Struct` fields are
+stored as JSON.
+
+```python
+from structtype import Struct, StructConfig
+from diskstore import DiskStore
+from diskstore.config import StructtypeArrayConfig
+
+class Point(Struct):
+    struct_config = StructConfig(array_like=True)
+    x: int
+    y: int
+
+config = StructtypeArrayConfig(Point, key_type=str)
+ds = DiskStore("/tmp/diskstore_config_sta.db", config=config)
+ds["p1"] = Point(x=1, y=2)
+point = ds["p1"]
+assert point == Point(x=1, y=2)
+```
+
 ### Configuration options
 
 Every config class accepts:

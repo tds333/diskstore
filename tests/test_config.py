@@ -15,6 +15,7 @@ from diskstore.config import (
     JsonConfig,
     NamedTupleConfig,
     PydanticConfig,
+    StructtypeArrayConfig,
     StructtypeConfig,
     escape_name,
     get_sqlite_type,
@@ -1090,6 +1091,175 @@ class TestStructtypeConfig:
 
         pragmas = {"mode": "wal"}
         config = StructtypeConfig(Point, pragmas=pragmas)
+        assert config.pragmas == pragmas
+
+
+# ============================================================================
+# Tests for StructtypeArrayConfig (structtype with array_like=True)
+# ============================================================================
+
+
+@pytest.mark.skipif(not HAS_STRUCTTYPE, reason="structtype not installed")
+class TestStructtypeArrayConfig:
+    """Test StructtypeArrayConfig class."""
+
+    @staticmethod
+    def make_point():
+        class Point(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            x: int
+            y: int
+
+        return Point
+
+    def test_init_fields(self):
+        """Top-level fields become individual columns."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls)
+        assert config.tablename == "Point"
+        assert config.struct is point_cls
+        assert config.fields == (
+            ("x", "INTEGER", NO_DEFAULT),
+            ("y", "INTEGER", NO_DEFAULT),
+        )
+
+    def test_field_types(self):
+        """Basic field types map to the matching SQLite types."""
+
+        class Record(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            i: int
+            f: float
+            s: str
+            b: bytes
+            flag: bool
+
+        config = StructtypeArrayConfig(Record)
+        types = {name: sqlite_type for name, sqlite_type, _ in config.fields}
+        assert types == {
+            "i": "INTEGER",
+            "f": "REAL",
+            "s": "TEXT",
+            "b": "BLOB",
+            "flag": "INTEGER",
+        }
+
+    def test_field_defaults(self):
+        """Bindable defaults are used; factories fall back to NO_DEFAULT."""
+
+        class Record(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            a: int = 5
+            b: str = "z"
+            c: int = structtype.Factory(lambda: 7)
+
+        config = StructtypeArrayConfig(Record)
+        assert config.fields == (
+            ("a", "INTEGER", 5),
+            ("b", "TEXT", "z"),
+            ("c", "INTEGER", NO_DEFAULT),
+        )
+
+    def test_nested_struct_field_as_json(self):
+        """A nested Struct field is stored as a JSON BLOB."""
+
+        class Inner(structtype.Struct):
+            a: int
+
+        class Outer(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            inner: Inner
+
+        config = StructtypeArrayConfig(Outer)
+        assert config.fields == (
+            ("id", "TEXT", NO_DEFAULT),
+            ("inner", "BLOB", NO_DEFAULT),
+        )
+        original = Outer(id="1", inner=Inner(a=5))
+        dumped = config.dump_value(0, original)
+        assert dumped == (0, "1", b'{"a":5}')
+        assert config.load_data(dumped) == original
+
+    def test_nested_struct_field_none(self):
+        """A None nested Struct field round-trips as NULL."""
+
+        class Inner(structtype.Struct):
+            a: int
+
+        class Outer(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            inner: Inner
+
+        config = StructtypeArrayConfig(Outer)
+        original = Outer(id="1", inner=None)
+        dumped = config.dump_value(0, original)
+        assert dumped == (0, "1", None)
+        assert config.load_data(dumped) == original
+
+    def test_requires_array_like(self):
+        """Structs without array_like=True are rejected."""
+
+        class Obj(structtype.Struct):
+            x: int
+
+        with pytest.raises(ValueError, match="array_like=True"):
+            StructtypeArrayConfig(Obj)
+
+    def test_key_field_rejected(self):
+        """A struct field named _key is rejected."""
+
+        class Bad(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            _key: str
+
+        with pytest.raises(ValueError, match="_key"):
+            StructtypeArrayConfig(Bad)
+
+    def test_init_custom_tablename(self):
+        """Custom tablename is respected."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls, tablename="CustomTable")
+        assert config.tablename == "CustomTable"
+
+    def test_dump_value(self):
+        """dump_value returns the key followed by the field values."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls)
+        result = config.dump_value(0, point_cls(x=1, y=2))
+        assert result == (0, 1, 2)
+
+    def test_load_data(self):
+        """load_data rebuilds the struct from the row tuple."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls)
+        assert config.load_data((0, 1, 2)) == point_cls(x=1, y=2)
+
+    def test_roundtrip(self):
+        """dump_value -> load_data roundtrip."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls)
+        original = point_cls(x=10, y=20)
+        assert config.load_data(config.dump_value(0, original)) == original
+
+    def test_key_type_parameter(self):
+        """key_type parameter is passed through."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls, key_type=int)
+        assert config.key_type == "INTEGER"
+
+    def test_timeout_parameter(self):
+        """timeout parameter is passed through."""
+        point_cls = self.make_point()
+        config = StructtypeArrayConfig(point_cls, timeout=20.0)
+        assert config.timeout == 20.0
+
+    def test_pragmas_parameter(self):
+        """pragmas parameter is passed through."""
+        point_cls = self.make_point()
+        pragmas = {"mode": "wal"}
+        config = StructtypeArrayConfig(point_cls, pragmas=pragmas)
         assert config.pragmas == pragmas
 
 

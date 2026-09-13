@@ -1,9 +1,10 @@
 # Changelog
 
-## 0.3.2 (unreleased)
+## 0.4.0 (unreleased)
 
 ### Added
 - `StructtypeConfig` — optional config class backed by `structtype` for fast, schema-validated serialization
+- `StructtypeArrayConfig` — stores each top-level field of an `array_like` structtype `Struct` in its own SQLite column (nested `Struct` fields as JSON)
 - Python 3.15 test coverage
 
 ### Changed

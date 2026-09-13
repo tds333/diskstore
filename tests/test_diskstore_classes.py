@@ -18,6 +18,7 @@ from diskstore.config import (
     BaseConfig,
     DataclassConfig,
     PydanticConfig,
+    StructtypeArrayConfig,
     StructtypeConfig,
 )
 
@@ -510,4 +511,123 @@ class TestStructtypeStruct:
         assert result
         assert result[0][1] == Item(id="50", name="item 50", count=50)
 
+        store.close()
+
+
+# ============================================================================
+# Tests for array_like structtype Struct
+# ============================================================================
+
+
+@pytest.mark.skipif(not HAS_STRUCTTYPE, reason="structtype not installed")
+class TestStructtypeArrayStruct:
+    """Test DiskStore with array_like structtype Struct and StructtypeArrayConfig."""
+
+    def test_structtype_array_roundtrip(self, tmpfilename) -> None:
+        """Test saving and loading an array_like structtype Struct."""
+
+        class Address(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            first_name: str
+            last_name: str
+            street: str
+            plz: int
+            city: str
+
+        value = Address(
+            id=str(uuid.uuid4()),
+            first_name="John",
+            last_name="Doe",
+            street="Mainstreet 1",
+            plz=77777,
+            city="Bonn",
+        )
+        store = DiskStore(tmpfilename, StructtypeArrayConfig(Address))
+        store[value.id] = value
+        result = store[value.id]
+        assert isinstance(result, Address)
+        assert result == value
+        del store[value.id]
+        store.close()
+
+    def test_structtype_array_multiple_records_and_query(self, tmpfilename) -> None:
+        """Fields are stored as native columns and can be queried."""
+
+        class Person(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            name: str
+            age: int
+
+        store = DiskStore(tmpfilename, StructtypeArrayConfig(Person))
+
+        people = [
+            Person(id="1", name="Alice", age=30),
+            Person(id="2", name="Bob", age=25),
+            Person(id="3", name="Charlie", age=35),
+        ]
+
+        for person in people:
+            store[person.id] = person
+
+        for person in people:
+            result = store[person.id]
+            assert result == person
+            assert isinstance(result, Person)
+
+        found = list(store.query(where="age = ?", parameters=(25,)))
+        assert found == [("2", people[1])]
+
+        store.close()
+
+    def test_structtype_array_nested_struct(self, tmpfilename) -> None:
+        """A nested Struct field is stored as JSON and round-trips."""
+
+        class Inner(structtype.Struct):
+            a: int
+            label: str = "inner"
+
+        class Outer(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            name: str
+            inner: Inner
+
+        value = Outer(id="1", name="outer", inner=Inner(a=5))
+        store = DiskStore(tmpfilename, StructtypeArrayConfig(Outer))
+        store[value.id] = value
+
+        result = store[value.id]
+        assert isinstance(result, Outer)
+        assert isinstance(result.inner, Inner)
+        assert result == value
+
+        found = list(store.query(where="name = ?", parameters=("outer",)))
+        assert found == [("1", value)]
+
+        store.close()
+
+    def test_structtype_array_auto_migration_adds_field(self, tmpfilename) -> None:
+        """Reopening with an extended struct adds the new column."""
+
+        class RecV1(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            name: str
+
+        class RecV2(structtype.Struct):
+            struct_config = structtype.StructConfig(array_like=True)
+            id: str
+            name: str
+            count: int = 0
+
+        store = DiskStore(tmpfilename, StructtypeArrayConfig(RecV1, tablename="Rec"))
+        store["1"] = RecV1(id="1", name="a")
+        store.close()
+
+        store = DiskStore(tmpfilename, StructtypeArrayConfig(RecV2, tablename="Rec"))
+        assert store["1"] == RecV2(id="1", name="a", count=0)
+        store["2"] = RecV2(id="2", name="b", count=5)
+        assert store["2"].count == 5
         store.close()

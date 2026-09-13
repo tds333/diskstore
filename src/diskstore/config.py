@@ -4,7 +4,7 @@ import dataclasses
 import json
 from abc import abstractmethod
 from collections.abc import Sequence
-from typing import Any, Iterable, Protocol
+from typing import Any, Iterable, Protocol, get_type_hints
 
 from .const import NO_DEFAULT, TIMEOUT, AnyLite, KeyType
 
@@ -273,3 +273,93 @@ class StructtypeConfig(BaseConfig):
 
     def load_data(self, data: tuple) -> Any:
         return self.struct.struct_validate_json(data[1])
+
+
+class StructtypeArrayConfig(BaseConfig):
+    """Config for ``array_like`` ``structtype.Struct`` types.
+
+    Unlike :class:`StructtypeConfig`, which stores the whole struct as a
+    single JSON BLOB, this config maps every top-level struct field to its
+    own SQLite column so individual fields can be queried and indexed.
+    Basic field types (``int``, ``float``, ``str``, ``bytes``, ``bool``)
+    are stored natively; nested ``structtype.Struct`` fields are stored as
+    JSON. Other complex fields fall back to ``BLOB`` and will fail at bind
+    time, just like :class:`DataclassConfig`.
+    """
+
+    def __init__(  # noqa: PLR0913, PLR0917
+        self,
+        struct,
+        tablename=None,
+        key_type=None,
+        timeout=None,
+        pragmas=None,
+        auto_migrate=None,
+    ):
+        config = getattr(struct, "__struct_config__", None) or {}
+        if not config.get("array_like"):
+            raise ValueError(
+                f"{getattr(struct, '__name__', struct)} must be defined with"
+                " array_like=True."
+            )
+        tablename = struct.__name__ if not tablename else tablename
+        super().__init__(
+            tablename=tablename,
+            key_type=key_type,
+            timeout=timeout,
+            pragmas=pragmas,
+            auto_migrate=auto_migrate,
+        )
+        names = struct.__struct_fields__
+        if "_key" in names:
+            raise ValueError(
+                f"Name _key is not allowed as attribute for {struct},"
+                " listed as field name in __struct_fields__."
+            )
+        hints = get_type_hints(struct)
+        defaults = struct.__struct_defaults__
+        first_default = len(names) - len(defaults)
+        self.struct = struct
+        struct_field_types = []
+        fields = []
+        for index, name in enumerate(names):
+            type_ = hints.get(name, bytes)
+            if isinstance(type_, type) and hasattr(type_, "struct_dump_json"):
+                struct_type = type_
+                sqlite_type = "BLOB"
+            else:
+                struct_type = None
+                sqlite_type = get_sqlite_type(type_)
+            struct_field_types.append(struct_type)
+            if index >= first_default:
+                default = defaults[index - first_default]
+                if not is_bindable_default(default):
+                    default = NO_DEFAULT
+            else:
+                default = NO_DEFAULT
+            fields.append((name, sqlite_type, default))
+        self._struct_field_types = tuple(struct_field_types)
+        self.fields = tuple(fields)
+
+    def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        data = [key]
+        for (_, field_value), struct_type in zip(
+            value, self._struct_field_types, strict=True
+        ):
+            if struct_type is not None:
+                dumped = None if field_value is None else field_value.struct_dump_json()
+            else:
+                dumped = field_value
+            data.append(dumped)
+        return tuple(data)
+
+    def load_data(self, data: tuple) -> Any:
+        values = []
+        for struct_type, raw in zip(self._struct_field_types, data[1:], strict=True):
+            if struct_type is not None:
+                values.append(
+                    None if raw is None else struct_type.struct_validate_json(raw)
+                )
+            else:
+                values.append(raw)
+        return self.struct(*values)
