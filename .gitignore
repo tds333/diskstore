@@ -26,3 +26,4 @@ htmlcov/
 scripts/bench-results
 
 .omo/
+graphify-out

@@ -16,7 +16,7 @@ dev = [
   "pytest-cov",
   "pytest-examples>=0.0.18",
   "pytest-xdist",
-  "structtype>=0.3.0",
+  "structtype>=0.8.1",
 ]
 docs = [
   "mkdocstrings[python]>=1.0.3",
@@ -68,4 +68,4 @@ ignore = [
 ]
 
 [tool.uv]
-exclude-newer = "1 days"
+#exclude-newer = "1 days"
