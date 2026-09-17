@@ -24,6 +24,24 @@ from .const import DEFAULT_RO_PRAGMAS, TIMEOUT, KeyType
 Connection = apsw.Connection
 Cursor = apsw.Cursor
 
+# Fork detection without calling os.getpid() on every operation.  On
+# platforms with os.register_at_fork a generation counter is bumped in
+# the child, otherwise fall back to comparing the process id.
+_HAS_REGISTER_AT_FORK = hasattr(os, "register_at_fork")
+_FORK_GENERATION = 0
+
+if _HAS_REGISTER_AT_FORK:
+
+    def _bump_fork_generation() -> None:
+        global _FORK_GENERATION  # noqa: PLW0603
+        _FORK_GENERATION += 1
+
+    os.register_at_fork(after_in_child=_bump_fork_generation)
+
+
+def _fork_token() -> int:
+    return _FORK_GENERATION if _HAS_REGISTER_AT_FORK else os.getpid()
+
 
 BasicType: TypeAlias = Union[bytes, str, int, float]
 
@@ -117,20 +135,20 @@ class DiskRead(Mapping):
 
     @property
     def _con(self) -> Connection:
-        # Check process ID to support process forking. If the process
-        # ID changes, close the connection and update the process ID.
+        # Detect process forking via a fork token. On a fork the token
+        # changes, so the inherited connection is closed and recreated.
 
-        local_pid = getattr(self._local, "pid", None)
-        pid: int = os.getpid()
+        local = self._local
+        token = _fork_token()
 
-        if local_pid != pid:
+        if getattr(local, "gen", None) != token:
             self.close()
-            self._local.pid = pid
+            local.gen = token
 
-        con = getattr(self._local, "con", None)
+        con = getattr(local, "con", None)
 
         if con is None:
-            con = self._local.con = Connection(
+            con = local.con = Connection(
                 self._filename, flags=apsw.SQLITE_OPEN_READONLY
             )
             con.set_busy_timeout(int(self._timeout * 1000))
@@ -142,15 +160,21 @@ class DiskRead(Mapping):
 
         return con
 
+    def _new_cursor(self) -> Cursor:
+        con = self._con
+        cursor = self._local.cursor = con.cursor()
+        return cursor
+
     @property
     def _cursor(self) -> Cursor:
         # Reuse a single cursor per thread for single-shot operations to
         # avoid a cursor allocation per call. Iteration and transact() use
-        # their own cursors so nested reads stay safe.
-        con = self._con
-        cursor = getattr(self._local, "cursor", None)
-        if cursor is None:
-            cursor = self._local.cursor = con.cursor()
+        # their own cursors so nested reads stay safe.  Fast path avoids the
+        # _con property; the slow path (fresh thread or fork) creates it.
+        local = self._local
+        cursor = getattr(local, "cursor", None)
+        if cursor is None or getattr(local, "gen", None) != _fork_token():
+            cursor = self._new_cursor()
         return cursor
 
     def __getitem__(self, key: KeyType):

@@ -20,7 +20,7 @@ import apsw
 
 from .config import ConfigProtocol, escape_name, get_sqlite_type
 from .const import DEFAULT_PRAGMAS, MISSING, NO_DEFAULT, KeyType
-from .diskread import DiskRead
+from .diskread import DiskRead, _fork_token
 
 Connection = apsw.Connection
 Cursor = apsw.Cursor
@@ -77,17 +77,17 @@ class DiskStore(DiskRead, MutableMapping):
 
     @property
     def _con(self) -> Connection:
-        # Check process ID to support process forking. If the process
-        # ID changes, close the connection and update the process ID.
+        # Detect process forking via a fork token. On a fork the token
+        # changes, so the inherited connection is closed and recreated.
 
-        local_pid = getattr(self._local, "pid", None)
-        pid: int = os.getpid()
+        local = self._local
+        token = _fork_token()
 
-        if local_pid != pid:
+        if getattr(local, "gen", None) != token:
             self.close()
-            self._local.pid = pid
+            local.gen = token
 
-        con = getattr(self._local, "con", None)
+        con = getattr(local, "con", None)
 
         if con is None:
             con = Connection(self._filename)
