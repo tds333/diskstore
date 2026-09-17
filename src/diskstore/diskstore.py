@@ -212,16 +212,12 @@ class DiskStore(DiskRead, MutableMapping):
             cursor.close()
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
-        with closing(
-            self._con.execute(self._statements["SET"], self._dump_value(key, value))
-        ):
-            pass
+        self._cursor.execute(self._statements["SET"], self._dump_value(key, value))
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
-        with closing(
-            self._con.execute(self._statements["ADD"], self._dump_value(key, value))
-        ) as cx:
-            rows = cx.fetchall()
+        cursor = self._cursor
+        cursor.execute(self._statements["ADD"], self._dump_value(key, value))
+        rows = cursor.fetchall()
 
         if not rows:
             return None
@@ -229,8 +225,9 @@ class DiskStore(DiskRead, MutableMapping):
         return rows[0][0]
 
     def pop(self, key: KeyType, default=MISSING):
-        with closing(self._con.execute(self._statements["POP"], (key,))) as cx:
-            rows = cx.fetchall()
+        cursor = self._cursor
+        cursor.execute(self._statements["POP"], (key,))
+        rows = cursor.fetchall()
 
         if not rows:
             if default is MISSING:

@@ -1197,6 +1197,59 @@ def test_differnt_threads(store) -> None:
         assert str(key) == value
 
 
+def test_cursor_reuse_single_shot_ops(store) -> None:
+    """GET/SET/CONTAINS/COUNT reuse one cursor without stale results."""
+    for value in range(100):
+        store[value] = f"value-{value}"
+
+    for value in range(100):
+        assert store[value] == f"value-{value}"
+        assert value in store
+
+    assert len(store) == 100
+    assert store.get(1000, None) is None
+    assert 1000 not in store
+
+
+def test_cursor_reuse_while_iterating(store) -> None:
+    """Nested reads/writes share a cursor safely during iteration."""
+    for value in range(10):
+        store[value] = value
+
+    for key in store:
+        assert store[key] == key
+        store[key] = key + 1000
+
+    for key, value in store.items():
+        assert value == key + 1000
+
+
+def test_cursor_reuse_during_query(store) -> None:
+    """Nested single-shot reads do not clobber an open query cursor."""
+    for value in range(10):
+        store[value] = value
+
+    for key, value in store.query(order="rowid ASC"):
+        assert store[key] == value
+        assert key in store
+
+
+def test_cursor_reuse_add_pop(store) -> None:
+    assert store.add("k", "v") == "k"
+    assert store.add("k", "other") is None
+    assert store.pop("k") == "v"
+    assert store.pop("missing", "default") == "default"
+    with pytest.raises(KeyError):
+        store.pop("missing")
+
+
+def test_cursor_recreated_after_close(store) -> None:
+    store["a"] = 1
+    assert store["a"] == 1
+    store.close()
+    assert store["a"] == 1
+
+
 def test_transact(store):
     values = [
         1234,

@@ -19,9 +19,10 @@ from typing import Generator, Optional, Sequence, TypeAlias, Union
 import apsw
 
 from .config import BaseConfig, ConfigProtocol, escape_name
-from .const import DEFAULT_RO_PRAGMAS, MISSING, TIMEOUT, KeyType
+from .const import DEFAULT_RO_PRAGMAS, TIMEOUT, KeyType
 
 Connection = apsw.Connection
+Cursor = apsw.Cursor
 
 
 BasicType: TypeAlias = Union[bytes, str, int, float]
@@ -141,16 +142,28 @@ class DiskRead(Mapping):
 
         return con
 
+    @property
+    def _cursor(self) -> Cursor:
+        # Reuse a single cursor per thread for single-shot operations to
+        # avoid a cursor allocation per call. Iteration and transact() use
+        # their own cursors so nested reads stay safe.
+        con = self._con
+        cursor = getattr(self._local, "cursor", None)
+        if cursor is None:
+            cursor = self._local.cursor = con.cursor()
+        return cursor
+
     def __getitem__(self, key: KeyType):
         """Get value for *key*, raises KeyError if not found."""
-        select = self._statements["GET"]
-        with closing(self._con.execute(select, (key,))) as cx:
-            row = next(cx, MISSING)
+        cursor = self._cursor
+        cursor.execute(self._statements["GET"], (key,))
+        # fetchall() drains the statement so it cannot block VACUUM.
+        rows = cursor.fetchall()
 
-        if row is MISSING:
+        if not rows:
             raise KeyError(key)
 
-        return self._load_data(row)  # ty:ignore[invalid-argument-type]
+        return self._load_data(rows[0])
 
     def keys(self):
         """Return a set-like view of keys in the mapping."""
@@ -207,9 +220,9 @@ class DiskRead(Mapping):
 
     def __contains__(self, key: object) -> bool:
         """Check if *key* exists in the store."""
-        with closing(self._con.execute(self._statements["CONTAINS"], (key,))) as cx:
-            row = cx.fetchone()
-        return row is not None
+        cursor = self._cursor
+        cursor.execute(self._statements["CONTAINS"], (key,))
+        return bool(cursor.fetchall())
 
     def __iter__(self):
         """Iterate over keys in insertion order."""
@@ -238,6 +251,10 @@ class DiskRead(Mapping):
             delattr(self._local, "con")
         except AttributeError:
             pass
+        try:
+            delattr(self._local, "cursor")
+        except AttributeError:
+            pass
 
     def __enter__(self):
         connection = self._con  # noqa
@@ -251,11 +268,10 @@ class DiskRead(Mapping):
 
         To do this count is used which is not a performant implementation.
         """
-        select = self._statements["COUNT"]
-
-        with closing(self._con.execute(select)) as cx:
-            rows = next(cx, (0,))
-        return rows[0]
+        cursor = self._cursor
+        cursor.execute(self._statements["COUNT"])
+        rows = cursor.fetchall()
+        return rows[0][0]
 
     def __getstate__(self):
         return {
