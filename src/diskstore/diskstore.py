@@ -81,11 +81,11 @@ class DiskStore(DiskRead, MutableMapping):
         local = self._local
         token = _fork_token()
 
-        if getattr(local, "gen", None) != token:
+        if local.fork_token != token:
             self.close()
-            local.gen = token
+            local.fork_token = token
 
-        con = getattr(local, "con", None)
+        con = local.con
 
         if con is None:
             con = Connection(self._filename)
@@ -105,10 +105,7 @@ class DiskStore(DiskRead, MutableMapping):
         # The per-thread transaction marker belongs to the connection, so
         # drop it whenever the connection goes away (explicit close or the
         # fork reconnect in ``_con``).
-        try:
-            delattr(self._local, "in_transaction")
-        except AttributeError:
-            pass
+        self._local.in_transaction = False
         super().close()
 
     @staticmethod
@@ -200,7 +197,7 @@ class DiskStore(DiskRead, MutableMapping):
         # connection.  A thread must never observe another thread's (or a
         # forking process's) transaction, so nested detection uses local
         # state rather than a shared instance attribute.
-        if getattr(local, "in_transaction", False):
+        if local.in_transaction:
             begin = False
         else:
             cursor.execute("BEGIN IMMEDIATE")
@@ -257,9 +254,12 @@ class DiskStore(DiskRead, MutableMapping):
         return key, value
 
     def __delitem__(self, key: KeyType) -> None:
-        with closing(self._con.execute(self._statements["DELETE"], (key,))) as cx:
-            row = cx.fetchone()
-        if row is None:
+        cursor = self._cursor
+        cursor.execute(self._statements["DELETE"], (key,))
+        # fetchall() drains the statement so autocheckpoint can run and a
+        # later COMMIT is not blocked by an in-progress statement.
+        rows = cursor.fetchall()
+        if not rows:
             raise KeyError(key)
 
     def setdefault(self, key: KeyType, default: Iterable | None = None):

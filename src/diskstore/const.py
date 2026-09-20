@@ -30,6 +30,7 @@ DEFAULT_PRAGMAS = {
     "mmap_size": 2**28,  # 256 MB
     "synchronous": 1,  # 0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA
     "temp_store": 2,  # 0=DEFAULT, 1=FILE, 2=MEMORY
+    "wal_autocheckpoint": 5000,
     # "pargma_busy_timeout": 5000,  # milliseconds
 }
 "default pragma settings"

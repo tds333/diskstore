@@ -17,7 +17,6 @@ import uuid
 from collections import namedtuple
 from dataclasses import asdict, astuple, dataclass, fields
 from typing import ClassVar, NamedTuple, Optional
-from unittest import mock
 
 import pytest
 
@@ -197,19 +196,17 @@ def test_key_type_blob(tmpfilename) -> None:
         assert store[1.0] == "1.0"
 
 
-def test_close_error(store) -> None:
-    class LocalTest(object):
-        def __init__(self):
-            self._calls = 0
+def test_close_idempotent(tmpfilename) -> None:
+    store = DiskStore(tmpfilename)
 
-        def __getattr__(self, name):
-            if self._calls:
-                raise AttributeError
-            self._calls += 1
-            return mock.Mock()
+    store.close()  # no connection was ever opened
 
-    with mock.patch.object(store, "_local", LocalTest()):
-        store.close()
+    store["a"] = 1  # opens one on demand
+    store.close()
+    store.close()  # closing twice is safe
+
+    assert store["a"] == 1  # reconnects on demand
+    store.close()
 
 
 def test_getsetdel(store) -> None:
@@ -891,6 +888,17 @@ def test_del(store) -> None:
     assert len(store.check()) == 0
 
 
+def test_del_does_not_block_later_transaction(store) -> None:
+    store.update({i: i for i in range(10)})
+    for i in range(10):
+        del store[i]
+    # The DELETE statement must be drained so it cannot block the COMMIT of
+    # a following transaction (nor suppress WAL autocheckpoint).  update()
+    # uses its own cursor, unlike __setitem__ which reuses the shared one.
+    store.update({"after": 1})
+    assert store["after"] == 1
+
+
 def test_check(store) -> None:
     blob = b"a" * 2**10
     keys = (0, 1, 1234, 56.78, "hello", b"world")
@@ -1200,8 +1208,36 @@ def test_differnt_threads(store) -> None:
         assert str(key) == value
 
 
+def test_thread_state_defaults_and_isolation(store) -> None:
+    """_ThreadState defaults are visible per thread and never shared."""
+    main_con = store._con
+    seen = {}
+
+    def worker():
+        local = store._local
+        seen["defaults"] = (
+            local.con,
+            local.cursor,
+            local.fork_token,
+            local.in_transaction,
+        )
+        local.in_transaction = True
+        local.fork_token = 12345
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    # A fresh thread sees the class-level defaults, not another thread's state.
+    assert seen["defaults"] == (None, None, None, False)
+    # Writes made in the worker stay in the worker.
+    assert store._local.in_transaction is False
+    assert store._local.fork_token != 12345
+    assert store._con is main_con
+
+
 def test_cursor_reuse_single_shot_ops(store) -> None:
-    """GET/SET/CONTAINS/COUNT reuse one cursor without stale results."""
+    """GET/SET/DELETE/CONTAINS/COUNT reuse one cursor without stale results."""
     for value in range(100):
         store[value] = f"value-{value}"
 
@@ -1212,6 +1248,14 @@ def test_cursor_reuse_single_shot_ops(store) -> None:
     assert len(store) == 100
     assert store.get(1000, None) is None
     assert 1000 not in store
+
+    for value in range(100):
+        del store[value]
+        assert value not in store
+
+    assert len(store) == 0
+    with pytest.raises(KeyError):
+        del store[0]
 
 
 def test_cursor_reuse_while_iterating(store) -> None:

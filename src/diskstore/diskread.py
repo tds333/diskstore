@@ -46,6 +46,21 @@ def _fork_token() -> int:
 BasicType: TypeAlias = Union[bytes, str, int, float]
 
 
+class _ThreadState(threading.local):
+    """Per-thread connection state.
+
+    The class-level defaults are visible from every thread, unlike
+    attributes assigned in ``__init__`` which only apply to the constructing
+    thread.  Callers can therefore read the fields directly without
+    ``getattr``.
+    """
+
+    con: Connection | None = None
+    cursor: Cursor | None = None
+    fork_token: int | None = None
+    in_transaction: bool = False
+
+
 class DiskKeysView(KeysView):
     __slots__ = ()
 
@@ -104,14 +119,14 @@ class DiskRead(Mapping):
         self._load_data = self._config.load_data
         self._pragmas = DEFAULT_RO_PRAGMAS.copy()
         self._pragmas.update(self._config.pragmas)
-        self._local = threading.local()
+        self._local: _ThreadState = _ThreadState()
 
         # precreated statements based on tablename and value_class
         tablename = escape_name(self._config.tablename)
         fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
         self._statements: dict[str, str] = {
             "GET": f"SELECT _key, {fields} FROM {tablename} WHERE _key = ? LIMIT 1",
-            "CONTAINS": f"SELECT _key FROM {tablename} WHERE _key = ? LIMIT 1",
+            "CONTAINS": f"SELECT 1 FROM {tablename} WHERE _key = ? LIMIT 1",
             "ITER": f"SELECT _key FROM {tablename} ORDER BY rowid ASC",
             "REVERSED": f"SELECT _key FROM {tablename} ORDER BY rowid DESC",
             "COUNT": f"SELECT COUNT (_key) FROM {tablename}",
@@ -141,11 +156,11 @@ class DiskRead(Mapping):
         local = self._local
         token = _fork_token()
 
-        if getattr(local, "gen", None) != token:
+        if local.fork_token != token:
             self.close()
-            local.gen = token
+            local.fork_token = token
 
-        con = getattr(local, "con", None)
+        con = local.con
 
         if con is None:
             con = local.con = Connection(
@@ -160,11 +175,6 @@ class DiskRead(Mapping):
 
         return con
 
-    def _new_cursor(self) -> Cursor:
-        con = self._con
-        cursor = self._local.cursor = con.cursor()
-        return cursor
-
     @property
     def _cursor(self) -> Cursor:
         # Reuse a single cursor per thread for single-shot operations to
@@ -172,9 +182,9 @@ class DiskRead(Mapping):
         # their own cursors so nested reads stay safe.  Fast path avoids the
         # _con property; the slow path (fresh thread or fork) creates it.
         local = self._local
-        cursor = getattr(local, "cursor", None)
-        if cursor is None or getattr(local, "gen", None) != _fork_token():
-            cursor = self._new_cursor()
+        cursor = local.cursor
+        if cursor is None or local.fork_token != _fork_token():
+            cursor = local.cursor = self._con.cursor()
         return cursor
 
     def __getitem__(self, key: KeyType):
@@ -267,18 +277,12 @@ class DiskRead(Mapping):
 
     def close(self) -> None:
         """Close the database connection if open."""
-        con = getattr(self._local, "con", None)
+        con = self._local.con
         if con is None:
             return
         con.close()
-        try:
-            delattr(self._local, "con")
-        except AttributeError:
-            pass
-        try:
-            delattr(self._local, "cursor")
-        except AttributeError:
-            pass
+        self._local.con = None
+        self._local.cursor = None
 
     def __enter__(self):
         connection = self._con  # noqa
