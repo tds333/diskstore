@@ -129,7 +129,7 @@ class DiskRead(Mapping):
             "CONTAINS": f"SELECT 1 FROM {tablename} WHERE _key = ? LIMIT 1",
             "ITER": f"SELECT _key FROM {tablename} ORDER BY rowid ASC",
             "REVERSED": f"SELECT _key FROM {tablename} ORDER BY rowid DESC",
-            "COUNT": f"SELECT COUNT (_key) FROM {tablename}",
+            "COUNT": f"SELECT COUNT(*) FROM {tablename}",
             "QUERY": f"SELECT _key, {fields} FROM {tablename}",
         }
 
@@ -294,7 +294,9 @@ class DiskRead(Mapping):
     def __len__(self):
         """Return the number of items in the store.
 
-        To do this count is used which is not a performant implementation.
+        ``COUNT(*)`` uses SQLite's specialised b-tree count instead of a
+        row-by-row scan that evaluates the key column, which is
+        substantially faster.
         """
         cursor = self._cursor
         cursor.execute(self._statements["COUNT"])
