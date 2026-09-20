@@ -16,7 +16,7 @@ class NO_DEFAULT:  # noqa: N801
 
 
 DEFAULT_RO_PRAGMAS = {
-    "cache_size": 2**13,  # 8,192 pages
+    "cache_size": -(32 * 1024),  # 32 MB
     "mmap_size": 2**28,  # 256 MB
     "temp_store": 2,  # 0=DEFAULT, 1=FILE, 2=MEMORY
     "synchronous": 1,  # 0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA
@@ -25,7 +25,8 @@ DEFAULT_RO_PRAGMAS = {
 
 DEFAULT_PRAGMAS = {
     "auto_vacuum": 0,  # 1=FULL, 0=None
-    "cache_size": 2**13,  # 8,192 pages
+    "cache_size": -(32 * 1024),  # 32 MB
+    "page_size": 4 * 4096,  # default is 4096
     "journal_mode": "wal",
     "mmap_size": 2**28,  # 256 MB
     "synchronous": 1,  # 0=OFF, 1=NORMAL, 2=FULL, 3=EXTRA
