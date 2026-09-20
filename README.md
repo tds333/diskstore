@@ -49,7 +49,8 @@ print(ds["key"])
 
 ```
 
-Everything is mostly stable and test coverage is nearly 100%. Documentation is missing.
+Everything is mostly stable and test coverage is nearly 100%. See the
+`docs/` directory for the user guide and API reference.
 
 ### Timings
 

@@ -50,7 +50,7 @@ uv run pytest tests/test_diskstore_classes.py -n auto -k "Msgspec or Pydantic"
 - `src/diskstore/diskstore.py` → `DiskStore` (read-write, `MutableMapping`)
 - `src/diskstore/diskread.py` → `DiskRead` (read-only, `Mapping`)
 - `src/diskstore/config.py` → `BaseConfig`, `NamedTupleConfig`, `JsonConfig`, `DataclassConfig`, `PydanticConfig`
-- `src/diskstore/const.py` → defaults (WAL journal, 256MB mmap, synchronous=NORMAL, cache=8192 pages)
+- `src/diskstore/const.py` → defaults (WAL journal, 16KB page size, 32MB cache, 256MB mmap, synchronous=NORMAL, wal_autocheckpoint=5000)
 
 ## Quirks
 

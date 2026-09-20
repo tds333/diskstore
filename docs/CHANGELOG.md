@@ -1,6 +1,21 @@
 # Changelog
 
-## 0.5.0 (unreleased)
+## 0.5.0 (2026-09-20)
+
+### Added
+- `page_size` default of 16 KB — fewer B-tree pages and a smaller database for larger values
+- `wal_autocheckpoint` default of 5000 pages — fewer, larger WAL checkpoints
+- `__contains__` uses `SELECT 1` instead of selecting the key
+
+### Changed
+- `__len__` uses `COUNT(*)`, letting SQLite use its specialised b-tree count (up to ~150× faster for text keys)
+- `cache_size` default expressed as 32 MB (negative value, KiB) so it is independent of `page_size`
+- Transaction state is per-thread (`_ThreadState`); `transact()` no longer shares state between threads
+- `__delitem__` reuses the per-thread cursor and drains the statement with `fetchall()`
+
+### Fixed
+- A fork inside a transaction no longer inherits transaction state, so the child rolls back correctly
+- `__delitem__` no longer leaves a statement in progress, which could suppress WAL autocheckpoint or block a later `COMMIT`
 
 ## 0.4.0 (2026-09-13)
 

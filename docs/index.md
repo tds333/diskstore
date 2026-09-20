@@ -363,11 +363,20 @@ that make single-key operations substantially faster.
 | Pragma | Value | Effect |
 |---|---|---|
 | `journal_mode` | `WAL` | Concurrent reads during writes |
+| `page_size` | 16 KB | Fewer B-tree pages and a smaller database (new databases only) |
+| `cache_size` | 32 MB (`-32768`, KiB) | Page cache per connection |
 | `mmap_size` | 256 MB | Memory-mapped I/O |
 | `synchronous` | `NORMAL` | Balance speed / durability |
-| `cache_size` | 8,192 pages | 8 MB page cache |
+| `temp_store` | `MEMORY` | Temp tables and indexes kept in memory |
+| `auto_vacuum` | `NONE` | No automatic vacuuming |
+| `wal_autocheckpoint` | 5000 pages (~82 MB at 16 KB) | WAL checkpoint threshold |
 
-Benchmark scripts are available at `scripts/benchmark_core.py`.
+`cache_size` and `wal_autocheckpoint` are counted in pages, so they scale with
+`page_size`.  A negative `cache_size` is interpreted by SQLite as KiB and is
+therefore independent of the page size.
+
+Benchmark scripts are available at `scripts/benchmark.py` and
+`scripts/benchmark_core.py`.
 
 ## License
 
