@@ -11,7 +11,6 @@ Examples:
 
 import os
 import os.path
-import threading
 from collections.abc import Mapping, MutableMapping
 from contextlib import closing, contextmanager
 from typing import Any, Iterable
@@ -39,7 +38,6 @@ class DiskStore(DiskRead, MutableMapping):
             config: Configuration as specified in ConfigProtocol
         """
         super().__init__(filename=filename, config=config)
-        self._txn_id = None
         tablename = escape_name(self._config.tablename)
 
         value_columns = self._config.fields
@@ -101,6 +99,17 @@ class DiskStore(DiskRead, MutableMapping):
             self._local.con = con
 
         return con
+
+    def close(self) -> None:
+        """Close the database connection if open."""
+        # The per-thread transaction marker belongs to the connection, so
+        # drop it whenever the connection goes away (explicit close or the
+        # fork reconnect in ``_con``).
+        try:
+            delattr(self._local, "in_transaction")
+        except AttributeError:
+            pass
+        super().close()
 
     @staticmethod
     def _get_field_create(field_tuple):
@@ -185,29 +194,30 @@ class DiskStore(DiskRead, MutableMapping):
         direct SQL execution.
         """
         cursor: Cursor = self._con.cursor()
-        tid = threading.get_ident()
-        txn_id = self._txn_id
+        local = self._local
 
-        if tid == txn_id:  # already inside a thread with a transaction
+        # Transaction state is per-thread, matching the per-thread
+        # connection.  A thread must never observe another thread's (or a
+        # forking process's) transaction, so nested detection uses local
+        # state rather than a shared instance attribute.
+        if getattr(local, "in_transaction", False):
             begin = False
         else:
             cursor.execute("BEGIN IMMEDIATE")
             begin = True
-            self._txn_id = tid
+            local.in_transaction = True
 
         try:
             yield cursor
         except BaseException:
             if begin:
-                assert self._txn_id == tid
-                self._txn_id = None
+                local.in_transaction = False
                 cursor.execute("ROLLBACK")
             cursor.close()
             raise
         else:
             if begin:
-                assert self._txn_id == tid
-                self._txn_id = None
+                local.in_transaction = False
                 cursor.execute("COMMIT")
             cursor.close()
 

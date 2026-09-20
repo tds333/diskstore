@@ -7,7 +7,10 @@ import os.path
 import pathlib
 import pickle
 import shutil
+import subprocess
+import sys
 import tempfile
+import textwrap
 import threading
 import time
 import uuid
@@ -1287,6 +1290,55 @@ def test_transact_twice_rollback(store):
                 raise ValueError("TEST")
 
     assert 10 not in store
+
+
+@pytest.mark.skipif(not hasattr(os, "fork"), reason="requires os.fork")
+def test_transact_state_is_not_inherited_by_fork(tmpfilename):
+    """A fork inside a transaction must not inherit transaction state.
+
+    Forking a multi-threaded process is unsafe, so the scenario runs in a
+    fresh single-threaded interpreter.
+    """
+    script = textwrap.dedent(
+        """
+        import os
+        import sys
+
+        from diskstore import DiskStore
+        from diskstore.config import BaseConfig
+
+        store = DiskStore(sys.argv[1], BaseConfig(timeout=5))
+        store.open()
+        store["parent"] = 0
+        read_fd, write_fd = os.pipe()
+        with store.transact():
+            store["parent"] = 1
+            pid = os.fork()
+            if pid == 0:
+                os.close(write_fd)
+                os.read(read_fd, 1)  # wait until parent releases the lock
+                try:
+                    with store.transact():
+                        store["child"] = 1
+                        raise ValueError("rollback")
+                except ValueError:
+                    pass
+                os._exit(0 if "child" not in store else 1)
+            os.close(read_fd)
+        os.write(write_fd, b"x")
+        _, status = os.waitpid(pid, 0)
+        store.close()
+        ok = os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0
+        sys.exit(0 if ok else 1)
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script, tmpfilename],
+        capture_output=True,
+        check=False,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr.decode()
 
 
 def test_timeout(tmpfilename):
