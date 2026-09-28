@@ -5,7 +5,7 @@ Single-package Python library providing fast SQLite-backed `MutableMapping`/`Map
 ## Toolchain
 
 - **Build/package**: `uv` (not pip/poetry). Lockfile: `uv.lock`. Builder: `uv_build`.
-- **Runtime dep**: `apsw` (not stdlib `sqlite3`).
+- **Runtime dep**: none — uses the stdlib `sqlite3` module; if `apsw` is installed it is used automatically (`diskstore[apsw]`). The stdlib path requires SQLite >= 3.35 for `RETURNING`. `apsw` is also a dev dependency for the A/B benchmark.
 - **Lint**: `uvx ruff check src/` (config in `pyproject.toml` — includes `ruff` lints + `isort`, `flake8-bugbear`, `flake8-pytest`, `pylint`, `naming`)
 - **Format**: `uvx ruff format src/`
 - **Type check**: `uvx ty check src/` then `uvx pyrefly check src/` (`ty` call has `-` prefix — its exit code is ignored). `make check` runs ty + ruff (lint); `make type-check` runs ty + pyrefly.
@@ -51,6 +51,8 @@ uv run pytest tests/test_diskstore_classes.py -n auto -k "Msgspec or Pydantic"
 - `src/diskstore/diskread.py` → `DiskRead` (read-only, `Mapping`)
 - `src/diskstore/config.py` → `BaseConfig`, `NamedTupleConfig`, `JsonConfig`, `DataclassConfig`, `PydanticConfig`
 - `src/diskstore/const.py` → defaults (WAL journal, 16KB page size, 32MB cache, 256MB mmap, synchronous=NORMAL, wal_autocheckpoint=5000)
+- `src/diskstore/_sqlite.py` → SQLite backend selector (apsw when installed, else stdlib) + shared busy translation
+- `src/diskstore/_sqlite_stdlib.py` / `_sqlite_apsw.py` → per-driver backends; `_sqlite_common.py` → shared SQL literal helpers
 
 ## Quirks
 

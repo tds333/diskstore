@@ -1,33 +1,38 @@
+# ruff: noqa: E501
 # /// script
 # requires-python = ">=3.14"
 # dependencies = [
 #     "diskcache>=5.6.3",
-#     "diskstore",
+#     "diskstore[apsw]",
 # ]
 #
 # [tool.uv.sources]
 # diskstore = { path = "../", editable = true }
 # ///
-"""Benchmark diskcache.Cache
+"""Benchmark DiskStore (both SQLite backends) against diskcache.Index.
 
-$ export PYTHONPATH=/Users/grantj/repos/python-diskcache
-$ python tests/benchmark_core.py -p 1 > tests/timings_core_p1.txt
-$ python tests/benchmark_core.py -p 8 > tests/timings_core_p8.txt
+Each configuration runs in its own subprocess so the SQLite backend can be
+selected per run through the ``DISKSTORE_BACKEND`` environment variable
+(``apsw`` or ``sqlite3``), giving a like-for-like comparison:
+
+    uv run scripts/benchmark_core.py -p 1
+    uv run scripts/benchmark_core.py -p 8
 """
 
+import argparse
 import collections as co
-
-# from codecs import ignore_errors
 import json
 import multiprocessing as mp
 import os
 import pickle
 import random
 import shutil
+import subprocess
+import sys
 import tempfile
 import time
 
-from utils import display
+from utils import display, percentile, secs
 
 PROCS = 8
 OPS = int(1e5)
@@ -97,15 +102,12 @@ example_data = json.dumps(
 """)
 )
 
-caches = []
-
-###############################################################################
-# DiskStore Benchmarks
-###############################################################################
-
-import diskcache
-
-import diskstore
+# (kind, DISKSTORE_BACKEND, label)
+CONFIGS = (
+    ("diskstore", "apsw", "diskstore.DiskStore (apsw)"),
+    ("diskstore", "sqlite3", "diskstore.DiskStore (sqlite3)"),
+    ("diskcache", None, "diskcache.Index"),
+)
 
 
 def worker(num, kind, args, kwargs):
@@ -161,75 +163,147 @@ def worker(num, kind, args, kwargs):
         pickle.dump(timings, writer, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def dispatch():
-    # tmp_directory = "/data/tmp/bench"
-    # os.makedirs(tmp_directory)
+def _cache(kind):
+    if kind == "diskcache":
+        import diskcache  # noqa: PLC0415
+
+        return diskcache.Index
+    import diskstore  # noqa: PLC0415
+
+    return diskstore.DiskStore
+
+
+def run_config(  # noqa: PLR0913, PLR0917
+    kind, tmpdir, out, procs, ops, key_range, warmup
+):
+    """Run a single configuration's workers and write its timings to *out*."""
+    global OPS, PROCS, RANGE, WARMUP  # noqa: PLW0603
+    OPS = ops
+    PROCS = procs
+    RANGE = key_range
+    WARMUP = warmup
+
+    cache_kind = _cache(kind)
+    path = os.path.join(tmpdir, "cache") if kind == "diskstore" else tmpdir
+
+    obj = cache_kind(path)
+    for index in range(RANGE):
+        key = str(index).encode("utf-8")
+        obj[key] = key
+    try:
+        obj.close()
+    except Exception:
+        pass
+
+    processes = [
+        mp.Process(target=worker, args=(num, cache_kind, (path,), {}))
+        for num in range(PROCS)
+    ]
+
+    for process in processes:
+        process.start()
+
+    for process in processes:
+        process.join()
+
+    timings = co.defaultdict(list)
+
+    for num in range(PROCS):
+        filename = "output-%d.pkl" % num
+
+        with open(filename, "rb") as reader:
+            output = pickle.load(reader)
+
+        for key in output:
+            timings[key].extend(output[key])
+
+        os.remove(filename)
+
+    payload = {key: list(value) for key, value in timings.items()}
+    for action in ("get", "set", "delete"):
+        payload.setdefault(action, [])
+
+    with open(out, "w") as handle:
+        json.dump(payload, handle)
+
+
+def compare(results):
+    actions = ("get", "set", "delete")
+    name_width = max(len(name) for name, _ in results)
+    header = "  %-*s %11s %11s %11s" % (name_width, "median/op", *actions)
+    print()
+    print("=" * len(header))
+    print("  Summary (median per operation)")
+    print("=" * len(header))
+    print(header)
+    print("-" * len(header))
+
+    for name, timings in results:
+        cells = " ".join(
+            "%11s" % secs(percentile(timings.get(action, []), 0.5))
+            for action in actions
+        )
+        print("  %-*s %s" % (name_width, name, cells))
+
+    print("=" * len(header))
+
+
+def dispatch(procs, ops, key_range, warmup):
     tmp_directory = tempfile.mkdtemp(prefix="diskstore_bench-")
+    results = []
 
-    caches.append(
-        (
-            "diskstore.DiskStore",
-            diskstore.DiskStore,
-            (os.path.join(tmp_directory, "diskstore.db"),),
-            # (":memory:",),
-            {},
-        )
-    )
+    try:
+        for index, (kind, backend, label) in enumerate(CONFIGS):
+            env = dict(os.environ)
+            if backend:
+                env["DISKSTORE_BACKEND"] = backend
+            else:
+                env.pop("DISKSTORE_BACKEND", None)
 
-    # import diskcache  # noqa
+            subdir = os.path.join(tmp_directory, "cfg%d" % index)
+            os.makedirs(subdir)
+            out = os.path.join(tmp_directory, "result%d.json" % index)
 
-    caches.append(
-        (
-            "diskcache.Index",
-            diskcache.Index,
-            (tmp_directory,),
-            {},
-        )
-    )
+            cmd = [
+                sys.executable,
+                os.path.abspath(__file__),
+                "--run-config",
+                kind,
+                "--tmpdir",
+                subdir,
+                "--out",
+                out,
+                "--procs",
+                str(procs),
+                "--ops",
+                str(ops),
+                "--key-range",
+                str(key_range),
+                "--warmup",
+                str(warmup),
+            ]
 
-    for name, kind, args, kwargs in caches:
-        obj = kind(*args, **kwargs)
+            print()
+            print("Running %s ..." % label)
+            try:
+                subprocess.run(cmd, check=True, env=env)
+            except subprocess.CalledProcessError:
+                print("Skipping %s (failed to run)" % label)
+                continue
 
-        for key in range(RANGE):
-            key = str(key).encode("utf-8")
-            obj[key] = key
+            with open(out) as handle:
+                timings = json.load(handle)
 
-        try:
-            obj.close()
-        except Exception:
-            pass
+            display(label, timings)
+            results.append((label, timings))
+    finally:
+        shutil.rmtree(tmp_directory, ignore_errors=True)
 
-        processes = [
-            mp.Process(target=worker, args=(value, kind, args, kwargs))
-            for value in range(PROCS)
-        ]
-
-        for process in processes:
-            process.start()
-
-        for process in processes:
-            process.join()
-
-        timings = co.defaultdict(list)
-
-        for num in range(PROCS):
-            filename = "output-%d.pkl" % num
-
-            with open(filename, "rb") as reader:
-                output = pickle.load(reader)
-
-            for key in output:
-                timings[key].extend(output[key])
-
-            os.remove(filename)
-
-        display(name, timings)
-    shutil.rmtree(tmp_directory, ignore_errors=True)
+    if results:
+        compare(results)
 
 
-if __name__ == "__main__":
-    import argparse
-
+def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -261,12 +335,32 @@ if __name__ == "__main__":
         default=WARMUP,
         help="Number of warmup operations before timings",
     )
-
+    # internal: run one configuration in this subprocess
+    parser.add_argument(
+        "--run-config", choices=("diskstore", "diskcache"), default=None
+    )
+    parser.add_argument("--tmpdir", default=None)
+    parser.add_argument("--out", default=None)
+    parser.add_argument("--procs", type=int, default=PROCS)
+    parser.add_argument("--ops", type=int, default=OPS)
+    parser.add_argument("--key-range", type=int, default=RANGE)
     args = parser.parse_args()
 
-    PROCS = int(args.processes)
-    OPS = int(args.operations)
-    RANGE = int(args.range)
-    WARMUP = int(args.warmup)
+    if args.run_config:
+        run_config(
+            args.run_config,
+            args.tmpdir,
+            args.out,
+            args.procs,
+            args.ops,
+            args.key_range,
+            int(args.warmup),
+        )
+        return
+
     print("len example_data:", len(example_data))
-    dispatch()
+    dispatch(int(args.processes), int(args.operations), args.range, int(args.warmup))
+
+
+if __name__ == "__main__":
+    main()

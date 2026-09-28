@@ -13,6 +13,7 @@ from typing import Any, Optional
 import pytest
 
 from diskstore import DiskStore
+from diskstore._sqlite import table_columns
 from diskstore.config import (
     NO_DEFAULT,
     BaseConfig,
@@ -266,8 +267,7 @@ class TestDataclassConfig:
         store = DiskStore(tmpfilename, DataclassConfig(Note))
 
         info = {
-            row[1]: row
-            for row in store._con.pragma("table_info", store._config.tablename)
+            row[1]: row for row in table_columns(store._con, store._config.tablename)
         }
         assert info["title"][3] == 1
         assert info["body"][3] == 0

@@ -7,10 +7,14 @@ license = "BSD-3-Clause"
 license-files = ["LICENSE.txt"]
 requires-python = ">=3.10"
 authors = [{ name = "tds333", email = "tds333@mailbox.org" }]
-dependencies = ["apsw>=3.51.3"]
+dependencies = []
+
+[project.optional-dependencies]
+apsw = ["apsw>=3.51.3"]
 
 [dependency-groups]
 dev = [
+  "apsw>=3.51.3",
   "msgspec>=0.20.0",
   "pydantic>=2.12.5,<=2.99.99b0",
   "pytest",

@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 SOURCE_DIR = ./src
-PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14 3.15 3.15
+PY_VERSIONS = 3.10 3.11 3.12 3.13 3.14 3.15
 export UV_MANAGED_PYTHON ?= 1
 
 ##@ CI/CD
@@ -9,8 +9,12 @@ build: ## Build
 	uv build
 
 .PHONY: test-cov
-test-cov: ## Run tests with coverage
-	uv run pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=diskstore
+test-cov: ## Run tests with coverage (both SQLite backends, merged report)
+	set -e; \
+	rm -f .coverage .coverage.*; \
+	DISKSTORE_BACKEND=apsw uv run pytest -n auto --cov=diskstore --cov-config=pyproject.toml --cov-append --cov-report=; \
+	DISKSTORE_BACKEND=sqlite3 uv run pytest -n auto --cov=diskstore --cov-config=pyproject.toml --cov-append --cov-report=; \
+	uv run coverage report
 
 ##@ Quality
 .PHONY: test
@@ -19,9 +23,15 @@ test: ## Run tests in current Python
 
 .PHONY: test-all
 test-all: ## Run tests in all supporte Python versions
-	for py_v in $(PY_VERSIONS); do \
-		uv run --isolated -p $$py_v pytest -n auto; \
+	set -e; for py_v in $(PY_VERSIONS); do \
+		DISKSTORE_BACKEND=sqlite3 uv run --isolated -p $$py_v pytest -n auto; \
+		DISKSTORE_BACKEND=apsw uv run --isolated -p $$py_v pytest -n auto; \
 	done
+
+.PHONY: test-backends
+test-backends: ## run tests against both sqlite drivers
+	DISKSTORE_BACKEND=sqlite3 uv run pytest -n auto
+	DISKSTORE_BACKEND=apsw uv run pytest -n auto
 
 .PHONY: update-python
 update-python: ## Reinstall managed Python versions to latest release
@@ -33,10 +43,12 @@ update-python: ## Reinstall managed Python versions to latest release
 	uv python install --reinstall 3.15t
 
 .PHONY: test-latest
-test-latest: ## Run tests in all supporte Python versions
-	PYTHON_GIL=0 uv run --isolated -p 3.14t pytest -n auto;
-	uv run --pre --isolated -p 3.15 pytest -n auto;
-	PYTHON_GIL=0 uv run --pre --isolated -p 3.15t pytest -n auto;
+test-free-threaded: ## Run tests on free-threaded builds, both backends
+	set -e; \
+	PYTHON_GIL=0 DISKSTORE_BACKEND=apsw uv run --isolated -p 3.14t pytest -n auto; \
+	PYTHON_GIL=0 DISKSTORE_BACKEND=sqlite3 uv run --isolated -p 3.14t pytest -n auto; \
+	PYTHON_GIL=0 DISKSTORE_BACKEND=apsw uv run --pre --isolated -p 3.15t pytest -n auto; \
+	PYTHON_GIL=0 DISKSTORE_BACKEND=sqlite3 uv run --pre --isolated -p 3.15t pytest -n auto
 
 .PHONY: check
 check: ## Run all checks
@@ -71,6 +83,10 @@ bench-all: ## run benchmark (get/set/delete/update)
 .PHONY: bench-configs
 bench-configs: ## run benchmark (BaseConfig vs StructtypeConfig vs PydanticConfig)
 	uv run scripts/benchmark_configs.py
+
+.PHONY: bench-ab
+bench-ab: ## run A/B benchmark (apsw vs stdlib sqlite3)
+	uv run scripts/bench_ab.py
 
 .PHONY: docs
 docs: ## build docs

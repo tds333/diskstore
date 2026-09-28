@@ -7,6 +7,7 @@ import os.path
 import pathlib
 import pickle
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -21,6 +22,7 @@ from typing import ClassVar, NamedTuple, Optional
 import pytest
 
 from diskstore import DiskRead, DiskStore
+from diskstore._sqlite import get_pragma, table_columns
 from diskstore.config import (
     BaseConfig,
     DataclassConfig,
@@ -28,6 +30,24 @@ from diskstore.config import (
 )
 from diskstore.const import DEFAULT_PRAGMAS, DEFAULT_RO_PRAGMAS
 from diskstore.diskstore import BusyError
+
+
+def jsonb_encode(data) -> bytes:
+    """Encode *data* as a SQLite JSONB blob using the stdlib driver."""
+    con = sqlite3.connect(":memory:")
+    try:
+        return con.execute("SELECT jsonb(?)", (json.dumps(data),)).fetchone()[0]
+    finally:
+        con.close()
+
+
+def jsonb_decode(data: bytes):
+    """Decode a SQLite JSONB blob to a Python object."""
+    con = sqlite3.connect(":memory:")
+    try:
+        return json.loads(con.execute("SELECT json(?)", (data,)).fetchone()[0])
+    finally:
+        con.close()
 
 
 @pytest.fixture
@@ -82,7 +102,7 @@ def test_migrate_table_static_create(tmpfilename) -> None:
     store = DiskStore(tmpfilename, config)
     con = store._con
     DiskStore._migrate_table(con, config)
-    info = list(con.pragma("table_info", config.tablename))
+    info = list(table_columns(con, config.tablename))
     assert info
     store.close()
 
@@ -106,7 +126,7 @@ def test_auto_migrate_from_config(tmpfilename) -> None:
     store = DiskStore(tmpfilename, config)
     _ = store._con  # triggers _migrate_table via auto_migrate
 
-    info = {row[1]: row for row in store._con.pragma("table_info", config.tablename)}
+    info = {row[1]: row for row in table_columns(store._con, config.tablename)}
     assert info["count"][3] == 1
     assert info["note"][3] == 0
 
@@ -132,7 +152,7 @@ def test_auto_migrate_disabled(tmpfilename) -> None:
     store = DiskStore(tmpfilename, config)
     _ = store._con  # triggers _con, but auto_migrate=False
 
-    info = {row[1] for row in store._con.pragma("table_info", config.tablename)}
+    info = {row[1] for row in table_columns(store._con, config.tablename)}
     assert "count" not in info
     store.close()
 
@@ -659,9 +679,10 @@ def test_custom_value_class_nt_json(tmpfilename) -> None:
     store.close()
 
 
+@pytest.mark.skipif(
+    sqlite3.sqlite_version_info < (3, 45), reason="jsonb requires SQLite >= 3.45"
+)
 def test_custom_value_class_nt_jsonb(tmpfilename) -> None:
-    from apsw import jsonb_decode, jsonb_encode  # noqa: PLC0415
-
     @dataclass
     class MyData:
         a: int
@@ -799,9 +820,10 @@ def test_query_json_value(store) -> None:
     assert result[0][1] == expected
 
 
+@pytest.mark.skipif(
+    sqlite3.sqlite_version_info < (3, 45), reason="jsonb requires SQLite >= 3.45"
+)
 def test_query_jsonb_value(store) -> None:
-    from apsw import jsonb_encode  # noqa: PLC0415
-
     for i in range(1, 100):
         key = f"{i}"
         data = {"data": f"mydata {i}", "key": i}
@@ -1101,7 +1123,7 @@ def test_pragmas(store) -> None:
         valid = True
 
         for key, value in DEFAULT_PRAGMAS.items():
-            result = store._con.pragma(key)
+            result = get_pragma(store._con, key)
 
             if result == value:
                 continue
@@ -1134,8 +1156,8 @@ def test_diskread_pragmas(tmpfilename) -> None:
 
     try:
         for key, value in DEFAULT_RO_PRAGMAS.items():
-            assert reader._con.pragma(key) == value, (
-                f"pragma {key} mismatch: {reader._con.pragma(key)} != {value}"
+            assert get_pragma(reader._con, key) == value, (
+                f"pragma {key} mismatch: {get_pragma(reader._con, key)} != {value}"
             )
     finally:
         reader.close()
@@ -1444,4 +1466,41 @@ def test_busy_retry(tmpfilename):
         store[1] = "1"
 
     thread.join()
+    store.close()
+
+
+def test_busy_implicit_write_raises_busy_error(tmpfilename):
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.001))
+    store.open()
+
+    def thread_run():
+        with store.transact():
+            store[1] = "2"
+            time.sleep(0.2)
+
+    thread = threading.Thread(target=thread_run)
+    thread.start()
+
+    time.sleep(0.05)
+    with pytest.raises(BusyError):
+        store[1] = "1"
+
+    thread.join()
+    store.close()
+
+
+def test_connections_are_per_thread(tmpfilename):
+    store = DiskStore(tmpfilename)
+    main_con = store._con
+    seen = []
+
+    def thread_run():
+        seen.append(store._con)
+
+    thread = threading.Thread(target=thread_run)
+    thread.start()
+    thread.join()
+
+    assert seen
+    assert seen[0] is not main_con
     store.close()

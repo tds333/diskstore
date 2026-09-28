@@ -69,8 +69,10 @@ get: 15.5 µs
 set/delete: 535 µs
 
 
-Why is the Diskstore library faster than others. Every overhead is eliminitated and it uses the
-faster sqlite library apsw with up to date sqlite library version. 
+Why is the Diskstore library faster than others. Overhead is eliminated and it
+uses SQLite through the Python standard-library `sqlite3` module, with no
+third-party runtime dependency. If [APSW](https://rogerbinns.github.io/apsw/)
+is installed (`pip install diskstore[apsw]`) it is used automatically.
 
 
 License

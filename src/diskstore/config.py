@@ -31,7 +31,7 @@ def escape_name(name: str) -> str:
 
 
 def is_bindable_default(value) -> bool:
-    """Whether *value* can be encoded by apsw as a SQL literal."""
+    """Whether *value* can be encoded as a SQL literal."""
     return value is None or isinstance(value, (str, bytes, int, float))
 
 
@@ -96,7 +96,7 @@ class BaseConfig(ConfigProtocol):
 
 
 class NamedTupleConfig(BaseConfig):
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         value_class,
         tablename=None,
@@ -172,7 +172,7 @@ class JsonConfig(BaseConfig):
 
 
 class DataclassConfig(BaseConfig):
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         dataclass,
         tablename=None,
@@ -220,7 +220,7 @@ class DataclassConfig(BaseConfig):
 
 
 class PydanticConfig(BaseConfig):
-    def __init__(  # noqa: PLR0913
+    def __init__(  # noqa: PLR0913, PLR0917
         self,
         model,
         tablename=None,

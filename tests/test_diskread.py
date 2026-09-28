@@ -56,7 +56,7 @@ def test_init_error() -> None:
 
     Invalid._fields = tuple(field.name for field in fields(Invalid))
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="_key is not allowed"):
         DiskRead("abc.db", NamedTupleConfig(value_class=Invalid))
 
 

@@ -2,13 +2,14 @@
 
 SQLite-backed `MutableMapping` / `Mapping` storage
 
-Fast disk storage built on top of the [APSW](https://rogerbinns.github.io/apsw/) SQLite
-wrapper.  Keys and values are serialised via a pluggable configuration system
-supporting plain blobs, JSON, `NamedTuple`s, dataclasses and Pydantic models.
+Fast disk storage built on top of the Python standard-library
+[`sqlite3`](https://docs.python.org/3/library/sqlite3.html) module.  Keys and
+values are serialised via a pluggable configuration system supporting plain
+blobs, JSON, `NamedTuple`s, dataclasses and Pydantic models.
 
 ## Features
 
-- Pure-Python (APSW bindings are C, but the library code is pure Python)
+- Pure-Python on top of the standard-library `sqlite3` module, with an optional APSW accelerator
 - Nearly 100 % test coverage
 - Thread-safe and process-safe (fork‑safe)
 - Developed on Python 3.14, tested on CPython 3.10–3.14
@@ -86,7 +87,8 @@ with ds.transact():
 ds.update({i: "value" for i in range(100)})
 ```
 
-`transact()` yields an `apsw.Cursor` for callers that need direct SQL.
+`transact()` yields the active backend's cursor (`sqlite3.Cursor`, or
+`apsw.Cursor` when APSW is installed) for callers that need direct SQL.
 Nested calls are idempotent (the outer transaction is reused).
 
 ## Auto-increment keys
@@ -353,10 +355,13 @@ assert ds2[2] == ProductV2("Gadget", 24.99, False)
 
 ## Performance notes
 
-DiskStore uses [APSW](https://rogerbinns.github.io/apsw/) instead of the
-stdlib `sqlite3` module.  APSW exposes the full SQLite C API, avoids
-wrapper overhead, and bundles recent SQLite versions with optimisations
-that make single-key operations substantially faster.
+DiskStore uses the Python standard-library `sqlite3` module by default, so it
+has no required third-party dependency.  If [APSW](https://rogerbinns.github.io/apsw/)
+is installed (`pip install diskstore[apsw]`) it is used automatically; force a
+backend with the `DISKSTORE_BACKEND` environment variable (`apsw` or
+`sqlite3`).  The stdlib path requires SQLite **3.35 or newer** (for
+`INSERT ... RETURNING`); the version bundled with the running CPython release
+is used.  APSW bundles its own recent SQLite.
 
 **Default pragmas** (`src/diskstore/const.py`):
 
@@ -375,8 +380,33 @@ that make single-key operations substantially faster.
 `page_size`.  A negative `cache_size` is interpreted by SQLite as KiB and is
 therefore independent of the page size.
 
-Benchmark scripts are available at `scripts/benchmark.py` and
-`scripts/benchmark_core.py`.
+### APSW vs stdlib `sqlite3`
+
+`scripts/bench_ab.py` compares the two backends of the current checkout by
+running the same workloads in two subprocesses, one with
+`DISKSTORE_BACKEND=apsw` and one with `DISKSTORE_BACKEND=sqlite3`.  The ratio is
+`sqlite3 / apsw`, so values above `1.0` mean APSW is faster.  Sample results
+(Python 3.14, SQLite 3.53.1, 20 000 ops, 10 000 keys, 1 KB values, 4 processes,
+median of 3 rounds):
+
+| Workload | `sqlite3 / apsw` |
+|---|---|
+| `set` (single key) | 1.00 – 1.08× |
+| `get` (single key) | 1.24 – 1.29× |
+| `delete` (single key) | 0.96 – 1.11× |
+| `update` (bulk upsert) | 1.05 – 1.20× |
+| `set` inside `transact()` | 1.19 – 1.38× |
+| concurrent `set` (4 procs) | 0.98 – 1.06× |
+| concurrent `get` (4 procs) | 1.16 – 1.21× |
+| concurrent `delete` (4 procs) | 0.76 – 0.86× |
+
+The standard-library driver is near parity for writes and up to ~40 % slower
+for reads and transaction-batched writes; installing the optional `apsw` extra
+recovers that.  Run `make bench-ab` to reproduce on your machine.
+
+Benchmark scripts are available at `scripts/benchmark.py`,
+`scripts/benchmark_core.py` and `scripts/bench_ab.py` (apsw vs stdlib
+`sqlite3` A/B comparison).
 
 ## License
 

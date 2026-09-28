@@ -16,13 +16,9 @@ from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from contextlib import closing
 from typing import Generator, Optional, Sequence, TypeAlias, Union
 
-import apsw
-
+from ._sqlite import Connection, Cursor, connect, set_pragma
 from .config import BaseConfig, ConfigProtocol, escape_name
 from .const import DEFAULT_RO_PRAGMAS, TIMEOUT, KeyType
-
-Connection = apsw.Connection
-Cursor = apsw.Cursor
 
 # Fork detection without calling os.getpid() on every operation.  On
 # platforms with os.register_at_fork a generation counter is bumped in
@@ -163,15 +159,14 @@ class DiskRead(Mapping):
         con = local.con
 
         if con is None:
-            con = local.con = Connection(
-                self._filename, flags=apsw.SQLITE_OPEN_READONLY
+            con = local.con = connect(
+                self._filename, readonly=True, timeout=self._timeout
             )
-            con.set_busy_timeout(int(self._timeout * 1000))
 
             # Some SQLite pragmas work on a per-connection basis so
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
-                con.pragma(key, value)
+                set_pragma(con, key, value)
 
         return con
 

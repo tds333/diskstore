@@ -1,10 +1,11 @@
+# ruff: noqa: E501
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
 #     "diskcache>=5.6.3",
 #     "pickledb<1",
 #     "sqlitedict",
-#     "diskstore",
+#     "diskstore[apsw]",
 # ]
 #
 # [tool.uv.sources]
@@ -16,15 +17,18 @@ Usage:
     uv run scripts/benchmark_kv_store.py
 """
 
+import argparse
+import os
+import subprocess
+import sys
 import timeit
 
 import diskcache
 
-import diskstore
-
 N = 100
 R = 7
 value = "value"
+DISKSTORE_DB = "/tmp/diskstore_bench_kv.db"
 
 
 def bench(label, setup, stmt):
@@ -35,11 +39,32 @@ def bench(label, setup, stmt):
     print(f"  {label:20s} {per_op_str:>12s}  (best of {R}, {N} loops)")
 
 
-print("diskstore set")
-ds = diskstore.DiskStore("/tmp/diskstore_bench_kv.db")
-bench("set", "", "ds['key'] = value")
-bench("get", "", "ds['key']")
-bench("set/delete", "", "ds['key'] = value; del ds['key']")
+_args = argparse.ArgumentParser()
+_args.add_argument("--diskstore-only", action="store_true", help=argparse.SUPPRESS)
+_options = _args.parse_args()
+
+if _options.diskstore_only:
+    # Runs in a subprocess so the SQLite backend (chosen at import time via
+    # DISKSTORE_BACKEND) can differ between sections.
+    import diskstore
+    from diskstore import _sqlite
+
+    ds = diskstore.DiskStore(DISKSTORE_DB)
+    print(f"\ndiskstore ({_sqlite.BACKEND_NAME}) set")
+    bench("set", "", "ds['key'] = value")
+    bench("get", "", "ds['key']")
+    bench("set/delete", "", "ds['key'] = value; del ds['key']")
+    raise SystemExit(0)
+
+for _backend in ("apsw", "sqlite3"):
+    _env = dict(os.environ, DISKSTORE_BACKEND=_backend)
+    _result = subprocess.run(
+        [sys.executable, os.path.abspath(__file__), "--diskstore-only"],
+        env=_env,
+        check=False,
+    )
+    if _result.returncode != 0:
+        print(f"\ndiskstore ({_backend}) skipped (backend not available)")
 
 print("\ndiskcache set")
 dc = diskcache.Cache("/tmp/diskcache")

@@ -320,12 +320,15 @@ wheels = [
 name = "diskstore"
 version = "0.5.0"
 source = { editable = "." }
-dependencies = [
+
+[package.optional-dependencies]
+apsw = [
     { name = "apsw" },
 ]
 
 [package.dev-dependencies]
 dev = [
+    { name = "apsw" },
     { name = "msgspec" },
     { name = "pydantic" },
     { name = "pytest" },
@@ -341,10 +344,12 @@ docs = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "apsw", specifier = ">=3.51.3" }]
+requires-dist = [{ name = "apsw", marker = "extra == 'apsw'", specifier = ">=3.51.3" }]
+provides-extras = ["apsw"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "apsw", specifier = ">=3.51.3" },
     { name = "msgspec", specifier = ">=0.20.0" },
     { name = "pydantic", specifier = ">=2.12.5,<=2.99.99b0" },
     { name = "pytest" },

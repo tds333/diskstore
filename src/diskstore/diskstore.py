@@ -15,16 +15,21 @@ from collections.abc import Mapping, MutableMapping
 from contextlib import closing, contextmanager
 from typing import Any, Iterable
 
-import apsw
-
+from ._sqlite import (
+    BusyError,  # noqa: F401  (re-exported)
+    Connection,
+    Cursor,
+    SQLError,  # noqa: F401  (re-exported)
+    connect,
+    execute,
+    executemany,
+    format_sql_value,
+    set_pragma,
+    table_columns,
+)
 from .config import ConfigProtocol, escape_name, get_sqlite_type
 from .const import DEFAULT_PRAGMAS, MISSING, NO_DEFAULT, KeyType
 from .diskread import DiskRead, _fork_token
-
-Connection = apsw.Connection
-Cursor = apsw.Cursor
-SQLError = apsw.SQLError
-BusyError = apsw.BusyError
 
 
 class DiskStore(DiskRead, MutableMapping):
@@ -61,7 +66,7 @@ class DiskStore(DiskRead, MutableMapping):
                 "POP": (
                     f"DELETE FROM {tablename} WHERE _key = ? RETURNING _key, {fields}"
                 ),
-                "CLEAR": f"DELETE FROM {tablename};VACUUM;",
+                "CLEAR": f"DELETE FROM {tablename}",
                 "POPITEM": (
                     f"DELETE FROM {tablename}"
                     f" WHERE rowid = (SELECT MAX(rowid) FROM {tablename})"
@@ -88,13 +93,12 @@ class DiskStore(DiskRead, MutableMapping):
         con = local.con
 
         if con is None:
-            con = Connection(self._filename)
-            con.set_busy_timeout(int(self._timeout * 1000))
+            con = connect(self._filename, timeout=self._timeout)
 
             # Some SQLite pragmas work on a per-connection basis so
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
-                con.pragma(key, value)
+                set_pragma(con, key, value)
             self._migrate_table(con, self._config)
             self._local.con = con
 
@@ -115,7 +119,7 @@ class DiskStore(DiskRead, MutableMapping):
         if field_default is None:
             default = " DEFAULT NULL"
         elif field_default is not NO_DEFAULT:
-            default = " NOT NULL DEFAULT " + apsw.format_sql_value(field_default)
+            default = " NOT NULL DEFAULT " + format_sql_value(field_default)
         name = escape_name(field_name)
         type_ = get_sqlite_type(field_type)
         field_create = f"{name} {type_}{default}"
@@ -134,9 +138,7 @@ class DiskStore(DiskRead, MutableMapping):
         callers.
         """
         tablename = escape_name(config.tablename)
-        existing = {
-            row[1] for row in (con.pragma("table_info", config.tablename) or [])
-        }
+        existing = {row[1] for row in (table_columns(con, config.tablename) or [])}
 
         if not existing:
             primary_key_type = get_sqlite_type(config.key_type)
@@ -153,9 +155,7 @@ class DiskStore(DiskRead, MutableMapping):
             config_names = {f[0] for f in config.fields}
             if config_names - existing:
                 con.execute("BEGIN IMMEDIATE")
-                existing = {
-                    row[1] for row in con.pragma("table_info", config.tablename)
-                }
+                existing = {row[1] for row in table_columns(con, config.tablename)}
                 for field_name, field_type, default_value in config.fields:
                     if field_name not in existing:
                         col_def = DiskStore._get_field_create(
@@ -187,7 +187,7 @@ class DiskStore(DiskRead, MutableMapping):
 
         Uses ``BEGIN IMMEDIATE`` to avoid deadlocks in concurrent
         workloads.  Nested calls are idempotent (reuse the same
-        transaction).  Yields an ``apsw.Cursor`` for callers that need
+        transaction).  Yields a ``sqlite3.Cursor`` for callers that need
         direct SQL execution.
         """
         cursor: Cursor = self._con.cursor()
@@ -200,7 +200,7 @@ class DiskStore(DiskRead, MutableMapping):
         if local.in_transaction:
             begin = False
         else:
-            cursor.execute("BEGIN IMMEDIATE")
+            execute(cursor, "BEGIN IMMEDIATE")
             begin = True
             local.in_transaction = True
 
@@ -209,21 +209,21 @@ class DiskStore(DiskRead, MutableMapping):
         except BaseException:
             if begin:
                 local.in_transaction = False
-                cursor.execute("ROLLBACK")
+                execute(cursor, "ROLLBACK")
             cursor.close()
             raise
         else:
             if begin:
                 local.in_transaction = False
-                cursor.execute("COMMIT")
+                execute(cursor, "COMMIT")
             cursor.close()
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
-        self._cursor.execute(self._statements["SET"], self._dump_value(key, value))
+        execute(self._cursor, self._statements["SET"], self._dump_value(key, value))
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
         cursor = self._cursor
-        cursor.execute(self._statements["ADD"], self._dump_value(key, value))
+        execute(cursor, self._statements["ADD"], self._dump_value(key, value))
         rows = cursor.fetchall()
 
         if not rows:
@@ -233,7 +233,7 @@ class DiskStore(DiskRead, MutableMapping):
 
     def pop(self, key: KeyType, default=MISSING):
         cursor = self._cursor
-        cursor.execute(self._statements["POP"], (key,))
+        execute(cursor, self._statements["POP"], (key,))
         rows = cursor.fetchall()
 
         if not rows:
@@ -245,7 +245,7 @@ class DiskStore(DiskRead, MutableMapping):
 
     def popitem(self):
         with self.transact() as cursor:
-            cursor.execute(self._statements["POPITEM"])
+            execute(cursor, self._statements["POPITEM"])
             row = next(cursor, None)
             if not row:
                 raise KeyError()
@@ -255,7 +255,7 @@ class DiskStore(DiskRead, MutableMapping):
 
     def __delitem__(self, key: KeyType) -> None:
         cursor = self._cursor
-        cursor.execute(self._statements["DELETE"], (key,))
+        execute(cursor, self._statements["DELETE"], (key,))
         # fetchall() drains the statement so autocheckpoint can run and a
         # later COMMIT is not blocked by an in-progress statement.
         rows = cursor.fetchall()
@@ -290,8 +290,12 @@ class DiskStore(DiskRead, MutableMapping):
         return warns
 
     def clear(self) -> None:
-        with closing(self._con.execute(self._statements["CLEAR"])):
+        con = self._con
+        with closing(con.execute(self._statements["CLEAR"])):
             pass
+        # VACUUM cannot run inside a transaction and the stdlib driver
+        # rejects multiple statements per execute(), so it is separate.
+        con.execute("VACUUM")
 
     def update(self, other=(), /, **kwargs):
         """Bulk upsert from a mapping or iterable.
@@ -303,22 +307,26 @@ class DiskStore(DiskRead, MutableMapping):
         with self.transact() as cursor:
             if other:
                 if isinstance(other, Mapping):
-                    cursor.executemany(
+                    executemany(
+                        cursor,
                         self._statements["SET"],
                         (self._dump_value(key, value) for key, value in other.items()),
                     )
                 elif hasattr(other, "keys"):
-                    cursor.executemany(
+                    executemany(
+                        cursor,
                         self._statements["SET"],
                         (self._dump_value(key, other[key]) for key in other.keys()),
                     )
                 else:
-                    cursor.executemany(
+                    executemany(
+                        cursor,
                         self._statements["SET"],
                         (self._dump_value(key, value) for key, value in other),
                     )
             if kwargs:
-                cursor.executemany(
+                executemany(
+                    cursor,
                     self._statements["SET"],
                     (self._dump_value(key, value) for key, value in kwargs.items()),
                 )

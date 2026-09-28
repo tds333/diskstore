@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Optional APSW accelerator: when `apsw` is installed it is used automatically; install with `diskstore[apsw]`. Force a backend with `DISKSTORE_BACKEND=apsw|sqlite3`.
+
+### Changed
+- SQLite driver defaults to the Python standard-library `sqlite3` module, so there is no required third-party runtime dependency
+- The stdlib path requires SQLite >= 3.35 (for `INSERT ... RETURNING`); APSW bundles its own SQLite
+- `apsw` moved to an optional extra and the `dev` dependency group (used by the A/B benchmark)
+- `BusyError` is now a diskstore-owned exception raised by both backends; other driver errors are backend-native and re-exported as `SQLError`/`Error`
+- `transact()` yields the active backend's cursor (`sqlite3.Cursor` or `apsw.Cursor`)
+- Private `_con` is the active backend's connection; PRAGMA access goes through internal helpers
+
 ## 0.5.0 (2026-09-20)
 
 ### Added
