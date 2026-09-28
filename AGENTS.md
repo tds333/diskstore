@@ -66,6 +66,7 @@ uv run pytest tests/test_diskstore_classes.py -n auto -k "Msgspec or Pydantic"
 
 - run test after changes
 - format code with ruff
+- no commits
 
 ## graphify
 
