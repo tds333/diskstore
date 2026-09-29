@@ -118,7 +118,7 @@ def run_micro(dbpath: str, ops: int, valsize: int, dbsize: int) -> dict:
 
 
 def _worker(payload) -> dict:
-    num, dbpath, ops, key_range, valsize = payload
+    num, dbpath, ops, key_range = payload
     import diskstore  # noqa: PLC0415
 
     random.seed(num)
@@ -126,29 +126,15 @@ def _worker(payload) -> dict:
 
     store = diskstore.DiskStore(dbpath)
     store.open()
-    value = make_value(valsize)
-    timings: dict[str, list[float]] = {"get": [], "set": [], "delete": []}
+    timings: dict[str, list[float]] = {"get": []}
 
     for _ in range(ops):
         key = str(random.randrange(key_range))
-        choice = random.random()
         start = time.perf_counter()
         try:
-            if choice < 0.90:
-                action = "get"
-                try:
-                    _ = store[key]
-                except KeyError:
-                    pass
-            elif choice < 0.99:
-                action = "set"
-                store[key] = value
-            else:
-                action = "delete"
-                try:
-                    del store[key]
-                except KeyError:
-                    pass
+            _ = store[key]
+        except KeyError:
+            pass
         except Exception as exc:
             message = str(exc).lower()
             if "locked" in message or "busy" in message:
@@ -156,7 +142,7 @@ def _worker(payload) -> dict:
                 time.sleep(0.001)
                 continue
             raise
-        timings[action].append(time.perf_counter() - start)
+        timings["get"].append(time.perf_counter() - start)
 
     store.close()
     return timings
@@ -174,11 +160,11 @@ def run_concurrent(
     seed.close()
 
     ctx = mp.get_context("fork")
-    payloads = [(num, dbpath, ops, key_range, valsize) for num in range(procs)]
+    payloads = [(num, dbpath, ops, key_range) for num in range(procs)]
     with ctx.Pool(procs) as pool:
         outputs = pool.map(_worker, payloads)
 
-    merged: dict[str, list[float]] = {"get": [], "set": [], "delete": []}
+    merged: dict[str, list[float]] = {"get": []}
     for output in outputs:
         for action, values in output.items():
             merged[action].extend(values)

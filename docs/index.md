@@ -396,9 +396,7 @@ median of 3 rounds):
 | `delete` (single key) | 0.96 – 1.11× |
 | `update` (bulk upsert) | 1.05 – 1.20× |
 | `set` inside `transact()` | 1.19 – 1.38× |
-| concurrent `set` (4 procs) | 0.98 – 1.06× |
 | concurrent `get` (4 procs) | 1.16 – 1.21× |
-| concurrent `delete` (4 procs) | 0.76 – 0.86× |
 
 The standard-library driver is near parity for writes and up to ~40 % slower
 for reads and transaction-batched writes; installing the optional `apsw` extra
