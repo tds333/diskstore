@@ -10,26 +10,25 @@ build: ## Build
 
 .PHONY: test-cov
 test-cov: ## Run tests with coverage (both SQLite backends, merged report)
-	set -e; \
 	rm -f .coverage .coverage.*; \
 	DISKSTORE_BACKEND=apsw uv run pytest -n auto --cov=diskstore --cov-config=pyproject.toml --cov-append --cov-report=; \
 	DISKSTORE_BACKEND=sqlite3 uv run pytest -n auto --cov=diskstore --cov-config=pyproject.toml --cov-append --cov-report=; \
 	uv run coverage report
 
 ##@ Quality
-.PHONY: test
-test: ## Run tests in current Python
+.PHONY: test-lf
+test-lf: ## Run tests in current Python
 	uv run pytest --lf -n auto
 
 .PHONY: test-all
 test-all: ## Run tests in all supporte Python versions
-	set -e; for py_v in $(PY_VERSIONS); do \
+	for py_v in $(PY_VERSIONS); do \
 		DISKSTORE_BACKEND=sqlite3 uv run --isolated -p $$py_v pytest -n auto; \
 		DISKSTORE_BACKEND=apsw uv run --isolated -p $$py_v pytest -n auto; \
 	done
 
-.PHONY: test-backends
-test-backends: ## run tests against both sqlite drivers
+.PHONY: test
+test: ## run tests against both sqlite drivers
 	DISKSTORE_BACKEND=sqlite3 uv run pytest -n auto
 	DISKSTORE_BACKEND=apsw uv run pytest -n auto
 
@@ -43,8 +42,7 @@ update-python: ## Reinstall managed Python versions to latest release
 	uv python install --reinstall 3.15t
 
 .PHONY: test-latest
-test-free-threaded: ## Run tests on free-threaded builds, both backends
-	set -e; \
+test-latest: ## Run tests on free-threaded builds, both backends
 	PYTHON_GIL=0 DISKSTORE_BACKEND=apsw uv run --isolated -p 3.14t pytest -n auto; \
 	PYTHON_GIL=0 DISKSTORE_BACKEND=sqlite3 uv run --isolated -p 3.14t pytest -n auto; \
 	PYTHON_GIL=0 DISKSTORE_BACKEND=apsw uv run --pre --isolated -p 3.15t pytest -n auto; \

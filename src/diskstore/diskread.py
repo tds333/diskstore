@@ -61,21 +61,21 @@ class DiskKeysView(KeysView):
     __slots__ = ()
 
     def __iter__(self):
-        return iter(self._mapping)  # ty:ignore[unresolved-attribute]
+        return iter(self._mapping)
 
     def __reversed__(self):
-        return reversed(self._mapping)  # ty:ignore[unresolved-attribute]
+        return reversed(self._mapping)
 
 
 class DiskValuesView(ValuesView):
     __slots__ = ()
 
     def __iter__(self):
-        for _, value in self._mapping.query(order="rowid ASC"):  # ty:ignore[unresolved-attribute]
+        for _, value in self._mapping.query(order="rowid ASC"):
             yield value
 
     def __reversed__(self):
-        for _, value in self._mapping.query(order="rowid DESC"):  # ty:ignore[unresolved-attribute]
+        for _, value in self._mapping.query(order="rowid DESC"):
             yield value
 
 
@@ -83,10 +83,10 @@ class DiskItemsView(ItemsView):
     __slots__ = ()
 
     def __iter__(self):
-        return self._mapping.query(order="rowid ASC")  # ty:ignore[unresolved-attribute]
+        return self._mapping.query(order="rowid ASC")
 
     def __reversed__(self):
-        return self._mapping.query(order="rowid DESC")  # ty:ignore[unresolved-attribute]
+        return self._mapping.query(order="rowid DESC")
 
 
 class DiskRead(Mapping):

@@ -16,10 +16,11 @@ Single-package Python library providing fast SQLite-backed `MutableMapping`/`Map
 
 ## Commands
 
-| `make test` | `uv run pytest --lf -n auto` (last-failed, parallel) |
+| `make test` | run tests against both sqlite drivers (`sqlite3` then `apsw`) |
+| `make test-lf` | `uv run pytest --lf -n auto` (last-failed, parallel) |
 | `make test-cov` | pytest with coverage (used by CI) |
-| `make test-all` | run tests across all supported Python versions |
-| `make test-latest` | 3.14t + 3.15 + 3.15t (free-threaded/pre-release) |
+| `make test-all` | run tests across all supported Python versions, both backends |
+| `make test-free-threaded` | 3.14t + 3.15t (free-threaded/pre-release), both backends |
 | `make check` | lint (ruff) + type check (ty) |
 | `make type-check` | type check (ty + pyrefly) |
 | `make ruff-check` | lint only (ruff) |
@@ -29,6 +30,8 @@ Single-package Python library providing fast SQLite-backed `MutableMapping`/`Map
 | `make bench` | `uv run scripts/benchmark_core.py -p 1` |
 | `make bench-kv` | `uv run scripts/benchmark_kv_store.py` |
 | `make bench-all` | `uv run scripts/benchmark.py` |
+| `make bench-configs` | `uv run scripts/benchmark_configs.py` (BaseConfig vs msgspec vs pydantic) |
+| `make bench-ab` | `uv run scripts/bench_ab.py` (apsw vs stdlib sqlite3) |
 | `make install` | `uv sync --frozen` |
 | `make update-uv` | `uv self update` |
 | `make update-lock` | `uv lock --upgrade` |
