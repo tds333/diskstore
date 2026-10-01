@@ -18,7 +18,7 @@ from ._sqlite_common import (  # noqa: F401  (re-exported)
 )
 
 
-class _Backend(Protocol):
+class _Backend(Protocol):  # pragma: no cover
     """Interface implemented by each SQLite backend module."""
 
     Connection: Any

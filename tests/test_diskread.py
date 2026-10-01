@@ -1,5 +1,7 @@
 """Test diskstore.DiskStore."""
 
+import importlib
+import os
 import os.path
 import shutil
 import tempfile
@@ -9,7 +11,7 @@ from typing import ClassVar
 
 import pytest
 
-from diskstore import DiskRead, DiskStore
+from diskstore import DiskRead, DiskStore, diskread
 from diskstore.config import BaseConfig, NamedTupleConfig
 
 data = OrderedDict((key, str(value)) for key, value in enumerate(range(10)))
@@ -177,6 +179,28 @@ def test_values(ro_store) -> None:
 def test_reversed_values(ro_store) -> None:
     values = list(reversed(ro_store.values()))
     assert values == list(reversed(data.values()))
+
+
+def test_fork_generation_bump() -> None:
+    """The at-fork hook bumps the generation the child detects."""
+    importlib.reload(diskread)
+    before = diskread._FORK_GENERATION
+    diskread._bump_fork_generation()
+    assert diskread._FORK_GENERATION == before + 1
+
+
+def test_fork_token_falls_back_to_pid(monkeypatch) -> None:
+    """Without os.register_at_fork the token is the process id."""
+    monkeypatch.delattr(os, "register_at_fork")
+    importlib.reload(diskread)
+    assert diskread._HAS_REGISTER_AT_FORK is False
+    assert diskread._fork_token() == os.getpid()
+
+    # Put the attribute back *before* reloading, otherwise the module is
+    # reloaded while it still looks absent and stays without its fork hook.
+    monkeypatch.undo()
+    importlib.reload(diskread)
+    assert diskread._HAS_REGISTER_AT_FORK is True
 
 
 # @pytest.mark.asyncio

@@ -50,16 +50,8 @@ def set_pragma(con: Connection, key: str, value: Any) -> None:
 
 
 def get_pragma(con: Connection, key: str) -> Any:
-    """Return the first column of ``PRAGMA key`` (``None`` if empty).
-
-    APSW returns a cursor for multi-row pragmas and the bare value
-    otherwise.
-    """
-    result = con.pragma(key)
-    if isinstance(result, Cursor):
-        row = next(iter(result), None)
-        return None if row is None else row[0]
-    return result
+    """Return the first column of ``PRAGMA key`` (``None`` if empty)."""
+    return con.pragma(key)
 
 
 def table_columns(con: Connection, table: str) -> list[tuple]:

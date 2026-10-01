@@ -37,6 +37,13 @@ def test_format_sql_value_alias() -> None:
     assert _sqlite_common.format_sql_value is _sqlite_common.quote_literal
 
 
+def test_quote_literal_rejects_unsupported_type() -> None:
+    # Only the SQL types diskstore can bind have a literal form; anything
+    # else must fail loudly rather than producing invalid SQL.
+    with pytest.raises(TypeError, match="cannot format SQL literal"):
+        _sqlite_common.quote_literal(object())
+
+
 def test_set_pragma_rejects_invalid_identifier(dbpath) -> None:
     con = _sqlite_stdlib.connect(dbpath)
     try:
