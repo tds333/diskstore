@@ -4,6 +4,7 @@
 
 ### Added
 - Optional APSW accelerator: when `apsw` is installed it is used automatically; install with `diskstore[apsw]`. Force a backend with `DISKSTORE_BACKEND=apsw|sqlite3`.
+- PEP 561 `py.typed` marker, so type checkers use the inline annotations
 
 ### Changed
 - SQLite driver defaults to the Python standard-library `sqlite3` module, so there is no required third-party runtime dependency
