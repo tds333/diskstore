@@ -6,7 +6,7 @@ in pure Python.
 Inspired by DiskCache library it implements a MutableMapping compatible sqlite
 based disk storage. Easy interface and very fast. Keys can be of basic sqlite storage
 classes defined by Python types `int`, `float`, `str`, `bytes`. Values can be of basic sqlite
-type or with custom configuration, supproting structtype, pydantic, msgspec, ...
+type or with custom configuration, supproting dataclasses, structtype, pydantic, ...
 
 
 ## Features

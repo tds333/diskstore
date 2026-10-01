@@ -10,7 +10,7 @@ blobs, JSON, `NamedTuple`s, dataclasses and Pydantic models.
 ## Features
 
 - Pure-Python on top of the standard-library `sqlite3` module, with an optional APSW accelerator
-- Nearly 100 % test coverage
+- 100 % test coverage
 - Thread-safe and process-safe (fork‑safe)
 - Developed on Python 3.14, tested on CPython 3.10–3.14
 - Tested using GitHub Actions on Linux and macOS

@@ -1,6 +1,6 @@
 """SQLite driver backend using APSW, when it is installed.
 
-Implements the backend interface consumed by :mod:`diskstore._sqlite`.
+Implements the backend interface consumed by ``diskstore._sqlite``.
 APSW bundles its own recent SQLite, so no version check is needed.
 """
 

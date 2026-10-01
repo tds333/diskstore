@@ -1,7 +1,7 @@
 """SQLite backend selection.
 
 Uses APSW when it is installed, otherwise the standard-library
-:mod:`sqlite3` module.  Set the ``DISKSTORE_BACKEND`` environment variable
+[sqlite3][sqlite3] module.  Set the ``DISKSTORE_BACKEND`` environment variable
 to ``apsw`` or ``sqlite3`` to force a backend (read at import time).
 
 Both backends implement the same small interface (``connect``,

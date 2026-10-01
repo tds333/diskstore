@@ -219,9 +219,16 @@ class DiskStore(DiskRead, MutableMapping):
             cursor.close()
 
     def __setitem__(self, key: KeyType, value: Any) -> None:
+        """Set *key* to *value*, replacing any existing entry."""
         execute(self._cursor, self._statements["SET"], self._dump_value(key, value))
 
     def add(self, key: KeyType | None, value: Iterable) -> KeyType | None:
+        """Insert a row and return its key.
+
+        With ``config=BaseConfig(key_type=int)``, passing ``None`` as *key*
+        lets SQLite assign the next rowid.  Returns ``None`` when the insert
+        produced no row.
+        """
         cursor = self._cursor
         execute(cursor, self._statements["ADD"], self._dump_value(key, value))
         rows = cursor.fetchall()
@@ -254,6 +261,7 @@ class DiskStore(DiskRead, MutableMapping):
         return key, value
 
     def __delitem__(self, key: KeyType) -> None:
+        """Delete *key*, raising [KeyError][KeyError] if it is absent."""
         cursor = self._cursor
         execute(cursor, self._statements["DELETE"], (key,))
         # fetchall() drains the statement so autocheckpoint can run and a
@@ -272,6 +280,11 @@ class DiskStore(DiskRead, MutableMapping):
                 return default
 
     def check(self, vacuum=False):
+        """Run ``PRAGMA integrity_check`` and return a list of warnings.
+
+        The list is empty when the database is healthy.  Pass ``vacuum=True``
+        to also reclaim free pages, which cannot run inside a transaction.
+        """
         warns = []
         sql = self._con.execute
 
@@ -332,4 +345,10 @@ class DiskStore(DiskRead, MutableMapping):
                 )
 
     def get_readonly_instance(self):
+        """Return a `DiskRead` over the same file.
+
+        The reader opens its own read-only connection, so it is not affected
+        by this store's transaction state.  The caller owns it and should
+        close it.
+        """
         return DiskRead(self._filename, self._config)

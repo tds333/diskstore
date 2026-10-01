@@ -10,6 +10,12 @@ from .const import NO_DEFAULT, TIMEOUT, AnyLite, KeyType
 
 
 def get_sqlite_type(type_) -> str:
+    """Map a Python type or SQLite type name to a SQLite column type.
+
+    ``str`` becomes TEXT, ``int`` and ``bool`` become INTEGER, ``float``
+    becomes REAL, and anything else becomes BLOB.  The four names ``"BLOB"``,
+    ``"TEXT"``, ``"INTEGER"`` and ``"REAL"`` are passed through unchanged.
+    """
     if type_ in {"BLOB", "TEXT", "INTEGER", "REAL"}:
         return type_
     sqlite_type = "BLOB"
@@ -26,6 +32,7 @@ def get_sqlite_type(type_) -> str:
 
 
 def escape_name(name: str) -> str:
+    """Quote *name* as a SQL identifier, doubling embedded quotes."""
     tablename = '"' + name.replace('"', '""') + '"'
     return tablename
 
@@ -70,16 +77,34 @@ class ConfigProtocol(Protocol):
 
 
 class BaseConfig(ConfigProtocol):
-    """Base default configuratin."""
+    """Default configuration: a single BLOB column named ``value``.
+
+    Values are stored as-is with no serialisation, so anything SQLite can bind
+    round-trips unchanged.  This is the config used when none is passed to
+    ``DiskStore``.
+
+    Args:
+        tablename: SQLite table name, default ``"DiskStore"``.
+        key_type: ``int``, ``str``, ``float``, ``bytes`` or a SQLite type name
+            such as ``"TEXT"``; see ``get_sqlite_type()``.  ``int`` enables
+            auto-increment keys via ``DiskStore.add()``.
+        timeout: seconds to wait for a locked database, default ``10.0``.
+        pragmas: extra PRAGMAs merged over ``DEFAULT_PRAGMAS``.
+        auto_migrate: create the table if missing and add missing columns at
+            connection start, default ``True``.
+
+    Subclass it to change how values are serialised; see ``JsonConfig`` and
+    ``DataclassConfig``.
+    """
 
     def __init__(
         self,
         *,
-        tablename=None,
-        key_type=None,
-        timeout=None,
-        pragmas=None,
-        auto_migrate=None,
+        tablename: str | None = None,
+        key_type: Any = None,
+        timeout: float | None = None,
+        pragmas: dict | None = None,
+        auto_migrate: bool | None = None,
     ):
         self.tablename = "DiskStore" if tablename is None else tablename
         self.key_type = "BLOB" if key_type is None else get_sqlite_type(key_type)
@@ -89,13 +114,27 @@ class BaseConfig(ConfigProtocol):
         self.fields = [("value", "BLOB", NO_DEFAULT)]
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """Return *value* as the parameter tuple for INSERT/UPDATE."""
         return (key, value)
 
     def load_data(self, data: tuple) -> Any:
+        """Return the value from a row tuple (key at index 0)."""
         return data[1]
 
 
 class NamedTupleConfig(BaseConfig):
+    """One SQLite column per [typing.NamedTuple][typing.NamedTuple] field.
+
+    Each annotated field becomes a column; type annotations are optional and
+    default to ``bytes`` (BLOB) when omitted.  Defaults come from
+    ``_field_defaults`` and are only used when they are bindable SQL literals.
+
+    The tablename defaults to the NamedTuple's class name.
+
+    ``_key`` is reserved for the primary key and raises
+    [ValueError][ValueError] if used as a field name.
+    """
+
     def __init__(  # noqa: PLR0913, PLR0917
         self,
         value_class,
@@ -118,6 +157,7 @@ class NamedTupleConfig(BaseConfig):
 
     @staticmethod
     def get_fields(value_class):
+        """Build the ``(name, sqlite_type, default)`` column tuples."""
         fields = []
         value_columns = tuple(value_class._fields)
         type_annotations = value_class.__annotations__
@@ -140,13 +180,23 @@ class NamedTupleConfig(BaseConfig):
         return tuple(fields)
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """Flatten the NamedTuple into the column parameter tuple."""
         return (key, *value)
 
     def load_data(self, data: tuple) -> Any:
+        """Rebuild the NamedTuple from a row tuple."""
         return self.value_class._make(data[1:])
 
 
 class JsonConfig(BaseConfig):
+    """Store values as JSON in a single TEXT column.
+
+    Values are serialised with [json.dumps][json.dumps] on write and parsed
+    with [json.loads][json.loads] on read, so any JSON-serialisable object
+    round-trips.  The tablename stays ``"DiskStore"`` — the class name is not
+    used.
+    """
+
     def __init__(
         self,
         tablename=None,
@@ -165,13 +215,30 @@ class JsonConfig(BaseConfig):
         self.fields = (("value", "TEXT", NO_DEFAULT),)
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """JSON-encode *value* for the single TEXT column."""
         return (key, json.dumps(value))
 
     def load_data(self, data: tuple) -> Any:
+        """JSON-decode the value from a row tuple."""
         return json.loads(data[1])
 
 
 class DataclassConfig(BaseConfig):
+    """One SQLite column per dataclass field.
+
+    Annotations are optional and default to ``bytes`` (BLOB) when omitted.
+    A field default becomes the column default only if it is a bindable SQL
+    literal (``None``, ``str``, ``bytes``, ``int`` or ``float``); anything
+    else is stored as ``NO_DEFAULT``.
+
+    The tablename defaults to the dataclass name.  ``_key`` is reserved for
+    the primary key and raises [ValueError][ValueError] if used as a field
+    name.
+
+    Because ``_migrate_table()`` adds missing columns, adding a field with a
+    default to an existing dataclass migrates old rows without data loss.
+    """
+
     def __init__(  # noqa: PLR0913, PLR0917
         self,
         dataclass,
@@ -194,6 +261,7 @@ class DataclassConfig(BaseConfig):
 
     @staticmethod
     def get_fields(dataclass):
+        """Build the ``(name, sqlite_type, default)`` column tuples."""
         if not dataclasses.is_dataclass(dataclass):
             raise ValueError("It is not a dataclass.")
         dc_fields = dataclasses.fields(dataclass)
@@ -213,13 +281,24 @@ class DataclassConfig(BaseConfig):
         return tuple(fields)
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """Flatten the dataclass into the column parameter tuple."""
         return (key, *dataclasses.astuple(value))
 
     def load_data(self, data: tuple) -> Any:
+        """Rebuild the dataclass instance from a row tuple."""
         return self.dataclass(*data[1:])
 
 
 class PydanticConfig(BaseConfig):
+    """Store values as JSON in a single TEXT column, via Pydantic.
+
+    Values are serialised with ``model_dump_json()`` and validated back with
+    ``model_validate_json()``, so nested models round-trip.  Requires
+    ``pydantic`` (an optional dependency).
+
+    The tablename defaults to the model's class name.
+    """
+
     def __init__(  # noqa: PLR0913, PLR0917
         self,
         model,
@@ -241,13 +320,24 @@ class PydanticConfig(BaseConfig):
         self.model = model
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """JSON-encode the model with ``model_dump_json``."""
         return (key, value.model_dump_json())
 
     def load_data(self, data: tuple) -> Any:
+        """Validate the stored JSON back into the model."""
         return self.model.model_validate_json(data[1])
 
 
 class StructtypeConfig(BaseConfig):
+    """Store values as JSON in a single BLOB column, via structtype.
+
+    Values are serialised with ``struct_dump_json()`` and validated back with
+    ``struct_validate_json()``.  Requires ``structtype`` (an optional
+    dependency); it is faster than Pydantic but validates less strictly.
+
+    The tablename defaults to the struct's class name.
+    """
+
     def __init__(  # noqa: PLR0913, PLR0917
         self,
         struct,
@@ -269,7 +359,9 @@ class StructtypeConfig(BaseConfig):
         self.struct = struct
 
     def dump_value(self, key: KeyType | None, value: Any) -> Sequence:
+        """JSON-encode the struct with ``struct_dump_json``."""
         return (key, value.struct_dump_json())
 
     def load_data(self, data: tuple) -> Any:
+        """Validate the stored JSON back into the struct."""
         return self.struct.struct_validate_json(data[1])

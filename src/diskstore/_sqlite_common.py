@@ -30,4 +30,4 @@ def quote_literal(value: Any) -> str:
 
 
 format_sql_value = quote_literal
-"APSW-compatible alias for :func:`quote_literal`."
+"APSW-compatible alias for ``quote_literal()``."

@@ -1,6 +1,7 @@
-"""SQLite driver backend using the standard-library :mod:`sqlite3` module.
+"""SQLite driver backend using the standard-library
+[sqlite3][sqlite3] module.
 
-Implements the backend interface consumed by :mod:`diskstore._sqlite`.
+Implements the backend interface consumed by ``diskstore._sqlite``.
 """
 
 import os
@@ -69,7 +70,7 @@ def _readonly_uri(filename: os.PathLike | str) -> str:
 
 
 def check_version() -> None:
-    """Raise if the runtime SQLite is older than :data:`SQLITE_MIN_VERSION`."""
+    """Raise if the runtime SQLite is older than ``SQLITE_MIN_VERSION``."""
     if sqlite3.sqlite_version_info < SQLITE_MIN_VERSION:
         required = ".".join(map(str, SQLITE_MIN_VERSION))
         raise RuntimeError(
@@ -83,7 +84,7 @@ def connect(
     readonly: bool = False,
     timeout: float = 10.0,
 ) -> Connection:
-    """Open an autocommit :class:`sqlite3.Connection`.
+    """Open an autocommit [sqlite3.Connection][sqlite3.Connection].
 
     ``isolation_level=None`` matches APSW's autocommit default so the
     explicit ``BEGIN IMMEDIATE`` handling in ``transact`` keeps working.
