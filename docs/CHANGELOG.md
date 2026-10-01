@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0 (2026-10-01) Unreleased
+## 0.6.0 (2026-10-01)
 
 ### Added
 - Optional APSW accelerator: when `apsw` is installed it is used automatically; install with `diskstore[apsw]`. Force a backend with `DISKSTORE_BACKEND=apsw|sqlite3`.

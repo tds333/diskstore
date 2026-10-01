@@ -1,13 +1,54 @@
 [project]
 name = "diskstore"
-version = "0.5.0"
+version = "0.6.0"
 description = "Simple MutableMapping compatible SQLite based disk storage."
 readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE.txt"]
 requires-python = ">=3.10"
 authors = [{ name = "tds333", email = "tds333@mailbox.org" }]
+keywords = [
+  "sqlite",
+  "diskstore",
+  "disk",
+  "storage",
+  "cache",
+  "key-value",
+  "kv",
+  "database",
+  "mutablemapping",
+  "apsw",
+  "pydantic",
+  "dataclasses",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3.15",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Database",
+  "Topic :: Database :: Database Engines/Servers",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Topic :: System :: Filesystems",
+  "Typing :: Typed",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tds333/diskstore"
+Documentation = "https://tds333.github.io/diskstore/"
+Source = "https://github.com/tds333/diskstore"
+Changelog = "https://github.com/tds333/diskstore/blob/main/docs/CHANGELOG.md"
+Issues = "https://github.com/tds333/diskstore/issues"
+CI = "https://github.com/tds333/diskstore/actions"
 
 [project.optional-dependencies]
 apsw = ["apsw>=3.51.3"]
