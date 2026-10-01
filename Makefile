@@ -59,8 +59,7 @@ ruff-check: ## Lint using ruff
 
 .PHONY: type-check
 type-check: ## Type check with
-	-uvx ty check ${SOURCE_DIR}
-	uvx pyrefly check ${SOURCE_DIR}
+	uvx ty check ${SOURCE_DIR}
 
 .PHONY: format
 format: ## Format files using ruff format

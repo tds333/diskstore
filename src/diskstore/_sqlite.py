@@ -16,6 +16,7 @@ from ._sqlite_common import (  # noqa: F401  (re-exported)
     format_sql_value,
     quote_literal,
 )
+from .const import TIMEOUT
 
 
 class _Backend(Protocol):  # pragma: no cover
@@ -32,7 +33,7 @@ class _Backend(Protocol):  # pragma: no cover
         filename: os.PathLike | str,
         *,
         readonly: bool = False,
-        timeout: float = 10.0,
+        timeout: float = TIMEOUT,
     ) -> Any: ...
 
     def set_pragma(self, con: Any, key: str, value: Any) -> None: ...

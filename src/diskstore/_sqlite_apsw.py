@@ -9,6 +9,8 @@ from typing import Any
 
 import apsw
 
+from .const import TIMEOUT
+
 Connection = apsw.Connection
 Cursor = apsw.Cursor
 SQLError = apsw.SQLError
@@ -28,7 +30,7 @@ def connect(
     filename: os.PathLike | str,
     *,
     readonly: bool = False,
-    timeout: float = 10.0,
+    timeout: float = TIMEOUT,
 ) -> Connection:
     """Open an APSW connection, read-only when requested.
 

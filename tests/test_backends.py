@@ -1,11 +1,13 @@
 """Driver-backend contract tests, run against every available backend."""
 
 import importlib.util
+import inspect
 import tempfile
 
 import pytest
 
 from diskstore import _sqlite_stdlib
+from diskstore.const import TIMEOUT
 
 BACKENDS = [(_sqlite_stdlib, "sqlite3")]
 if importlib.util.find_spec("apsw") is not None:
@@ -32,6 +34,18 @@ def test_connect_and_pragma_roundtrip(backend, dbpath) -> None:
         assert backend.get_pragma(con, "cache_size") == -4096
     finally:
         con.close()
+
+
+def test_connect_default_timeout_is_shared_const(backend) -> None:
+    """connect() must default to const.TIMEOUT, not a duplicated literal.
+
+    Guards against the 10.0 literal creeping back into a backend signature
+    and silently diverging from the value BaseConfig hands out.  Identity is
+    checked deliberately: a literal 10.0 compares equal to the const, so an
+    equality check would not notice the regression.
+    """
+    default = inspect.signature(backend.connect).parameters["timeout"].default
+    assert default is TIMEOUT
 
 
 def test_connect_timeout_sets_busy_timeout(backend, dbpath) -> None:

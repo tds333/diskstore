@@ -88,7 +88,9 @@ class BaseConfig(ConfigProtocol):
         key_type: ``int``, ``str``, ``float``, ``bytes`` or a SQLite type name
             such as ``"TEXT"``; see ``get_sqlite_type()``.  ``int`` enables
             auto-increment keys via ``DiskStore.add()``.
-        timeout: seconds to wait for a locked database, default ``10.0``.
+        timeout: seconds to wait for a locked database, default ``TIMEOUT``
+            (``10.0``).  A negative value is treated as "use the
+            default".
         pragmas: extra PRAGMAs merged over ``DEFAULT_PRAGMAS``.
         auto_migrate: create the table if missing and add missing columns at
             connection start, default ``True``.

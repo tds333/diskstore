@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from ._sqlite_common import _quote_identifier, quote_literal
+from .const import TIMEOUT
 
 SQLITE_MIN_VERSION = (3, 35)
 "Minimum SQLite version required (``RETURNING`` support)."
@@ -82,7 +83,7 @@ def connect(
     filename: os.PathLike | str,
     *,
     readonly: bool = False,
-    timeout: float = 10.0,
+    timeout: float = TIMEOUT,
 ) -> Connection:
     """Open an autocommit [sqlite3.Connection][sqlite3.Connection].
 

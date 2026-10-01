@@ -13,6 +13,7 @@ import pytest
 
 from diskstore import DiskRead, DiskStore, diskread
 from diskstore.config import BaseConfig, NamedTupleConfig
+from diskstore.const import TIMEOUT
 
 data = OrderedDict((key, str(value)) for key, value in enumerate(range(10)))
 
@@ -48,6 +49,14 @@ def test_init_tablename(store_file) -> None:
 def test_init_timeout(store_file) -> None:
     dr = DiskRead(store_file, BaseConfig(timeout=1.0))
     assert dr[0] == "0"
+    assert dr.timeout == 1.0
+
+
+@pytest.mark.parametrize("configured", [None, -1.0, -0.5])
+def test_timeout_defaults_to_const(store_file, configured) -> None:
+    """None and negative values fall back to the shared TIMEOUT const."""
+    dr = DiskRead(store_file, BaseConfig(timeout=configured))
+    assert dr.timeout == TIMEOUT
 
 
 def test_init_error() -> None:
