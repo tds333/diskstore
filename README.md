@@ -6,7 +6,7 @@ in pure Python.
 Inspired by DiskCache library it implements a MutableMapping compatible sqlite
 based disk storage. Easy interface and very fast. Keys can be of basic sqlite storage
 classes defined by Python types `int`, `float`, `str`, `bytes`. Values can be of basic sqlite
-type or with custom configuration.
+type or with custom configuration, supproting structtype, pydantic, msgspec, ...
 
 
 ## Features
@@ -15,9 +15,9 @@ type or with custom configuration.
 - nearly 100% test coverage
 - Performance matters
 - Thread-safe and process-safe
-- Developed on Python 3.10
+- Developed on Python 3.15
 - Tested on CPython 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
-- Tested using GitHub Actions
+- Optional performance improved implementation bases on apsw.
 
 
 ## Quickstart
@@ -49,8 +49,7 @@ print(ds["key"])
 
 ```
 
-Everything is mostly stable and test coverage is nearly 100%. See the
-`docs/` directory for the user guide and API reference.
+See the `docs/` directory for the user guide and API reference.
 
 ### Timings
 
@@ -69,10 +68,10 @@ get: 15.5 µs
 set/delete: 535 µs
 
 
-Why is the Diskstore library faster than others. Overhead is eliminated and it
-uses SQLite through the Python standard-library `sqlite3` module, with no
-third-party runtime dependency. If [APSW](https://rogerbinns.github.io/apsw/)
-is installed (`pip install diskstore[apsw]`) it is used automatically.
+Why is the Diskstore library faster than others. Overhead is eliminated and 
+operations where optimized. If [APSW](https://rogerbinns.github.io/apsw/)
+is installed (`pip install diskstore[apsw]`) it is used automatically
+for furhter performance improvements.
 
 
 License
