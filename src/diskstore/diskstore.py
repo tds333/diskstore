@@ -286,10 +286,11 @@ class DiskStore(DiskRead, MutableMapping):
         to also reclaim free pages, which cannot run inside a transaction.
         """
         warns = []
-        sql = self._con.execute
+        con = self._con
 
-        # Check integrity of database.
-        with closing(sql("PRAGMA integrity_check")) as cx:
+        # Check integrity of database.  A cursor per statement, because
+        # closing the first one leaves the second unusable on both drivers.
+        with closing(execute(con.cursor(), "PRAGMA integrity_check")) as cx:
             rows = cx.fetchall()
 
         if len(rows) != 1 or rows[0][0] != "ok":
@@ -297,18 +298,18 @@ class DiskStore(DiskRead, MutableMapping):
                 warns.append(message)
 
         if vacuum:
-            with closing(sql("VACUUM")):
+            with closing(execute(con.cursor(), "VACUUM")):
                 pass
 
         return warns
 
     def clear(self) -> None:
         con = self._con
-        with closing(con.execute(self._statements["CLEAR"])):
+        with closing(execute(con.cursor(), self._statements["CLEAR"])):
             pass
         # VACUUM cannot run inside a transaction and the stdlib driver
         # rejects multiple statements per execute(), so it is separate.
-        con.execute("VACUUM")
+        execute(con.cursor(), "VACUUM")
 
     def update(self, other=(), /, **kwargs):
         """Bulk upsert from a mapping or iterable.

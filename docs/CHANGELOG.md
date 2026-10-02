@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- `is_busy()` now recognises a re-raised `BusyError` on the APSW backend; the diskstore `BusyError` subclasses `apsw.BusyError` rather than `apsw.Error`, so a `while is_busy(exc): retry` loop no longer spins forever when APSW is active
+- `clear()` and `check(vacuum=True)` now raise `BusyError` under contention instead of leaking the raw driver error, matching the other write operations
+
 ## 0.6.0 (2026-10-01)
 
 ### Added

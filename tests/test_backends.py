@@ -105,3 +105,39 @@ def test_busy_is_detected(backend, dbpath) -> None:
     finally:
         other.close()
         holder.close()
+
+
+def test_busy_error_is_detected_as_busy(backend) -> None:
+    """is_busy() must recognise a BusyError it constructed itself.
+
+    ``execute()`` re-raises busy conditions as a freshly built BusyError, so
+    is_busy() has to stay true for that wrapper too.  A backend whose BusyError
+    is a sibling of the driver's own busy class (rather than a subclass) fails
+    here, which silently breaks ``while is_busy(exc): retry`` loops.
+    """
+    assert backend.is_busy(backend.BusyError("database is locked"))
+
+
+def test_busy_error_is_busy_after_rewrap(dbpath) -> None:
+    """is_busy() must survive the re-raise in the active backend's execute().
+
+    Deliberately not parametrized over ``backend``: ``_sqlite.execute`` is
+    bound to whichever backend ``DISKSTORE_BACKEND`` selected at import time,
+    so it can only be driven against that one.  ``make test`` runs the whole
+    file under both values, which is what covers the other backend.
+    """
+    from diskstore import _sqlite
+
+    holder = _sqlite.connect(dbpath, timeout=0.0)
+    holder.execute("CREATE TABLE t(x)")
+    holder.execute("BEGIN IMMEDIATE")
+
+    other = _sqlite.connect(dbpath, timeout=0.001)
+    cursor = other.cursor()
+    try:
+        with pytest.raises(_sqlite.BusyError) as excinfo:
+            _sqlite.execute(cursor, "BEGIN IMMEDIATE")
+        assert _sqlite.is_busy(excinfo.value)
+    finally:
+        other.close()
+        holder.close()

@@ -1489,6 +1489,73 @@ def test_busy_implicit_write_raises_busy_error(tmpfilename):
     store.close()
 
 
+def _hold_write_lock(store, ready, stop):
+    """Hold a write lock on *store* until *stop* is set."""
+    with store.transact():
+        store[1] = "held"
+        ready.set()
+        stop.wait(3.0)
+
+
+@pytest.fixture
+def busy_store(tmpfilename):
+    """A store whose database is locked by another connection, plus its handle.
+
+    Yields the contended store once the lock is held; the lock is released and
+    both stores closed on teardown.
+    """
+    setup = DiskStore(tmpfilename, BaseConfig(timeout=5.0))
+    setup[0] = "seed"
+    setup.close()
+
+    ready, stop = threading.Event(), threading.Event()
+    holder = DiskStore(tmpfilename, BaseConfig(timeout=5.0))
+    thread = threading.Thread(target=_hold_write_lock, args=(holder, ready, stop))
+    thread.start()
+    assert ready.wait(3.0)
+
+    store = DiskStore(tmpfilename, BaseConfig(timeout=0.001))
+    try:
+        yield store
+    finally:
+        stop.set()
+        thread.join()
+        store.close()
+        holder.close()
+
+
+def test_busy_clear_raises_busy_error(busy_store):
+    """clear() is a write, so it must raise BusyError like the other writes.
+
+    It calls the connection's execute() directly, so it used to escape the
+    busy translation in the execute() wrapper and raise the raw driver error
+    instead of diskstore's own BusyError.
+    """
+    with pytest.raises(BusyError):
+        busy_store.clear()
+
+
+def test_busy_check_vacuum_raises_busy_error(busy_store):
+    """check(vacuum=True) runs VACUUM, which needs the lock, so it too
+    must surface as BusyError rather than a raw driver error."""
+    with pytest.raises(BusyError):
+        busy_store.check(vacuum=True)
+
+
+def test_clear_and_check_work_without_contention(tmpfilename):
+    """The two operations above must still work on an uncontended store."""
+    store = DiskStore(tmpfilename, BaseConfig(timeout=5.0))
+    store[1] = "a"
+    store[2] = "b"
+    store.clear()
+    assert len(store) == 0
+    assert store.check() == []
+    assert store.check(vacuum=True) == []
+    store[3] = "c"
+    assert store[3] == "c"
+    store.close()
+
+
 def test_connections_are_per_thread(tmpfilename):
     store = DiskStore(tmpfilename)
     main_con = store._con
