@@ -32,23 +32,6 @@ _BUSY_NAMES = frozenset(
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
 
-class ClosingConnection(sqlite3.Connection):
-    """A connection that closes itself on garbage collection.
-
-    Per-thread connections are dropped without an explicit ``close`` when a
-    thread ends (and doc examples are not always closed); closing in
-    ``__del__`` releases the file handle deterministically instead of
-    relying on the interpreter shutdown sequence, which emits a
-    ``ResourceWarning``.
-    """
-
-    def __del__(self) -> None:
-        try:
-            self.close()
-        except Exception:
-            pass
-
-
 class BusyError(sqlite3.Error):
     """Raised when SQLite reports a busy condition.
 
@@ -105,11 +88,8 @@ def connect(
             uri=True,
             timeout=timeout,
             isolation_level=None,
-            factory=ClosingConnection,
         )
-    return sqlite3.connect(
-        filename, timeout=timeout, isolation_level=None, factory=ClosingConnection
-    )
+    return sqlite3.connect(filename, timeout=timeout, isolation_level=None)
 
 
 def _check_pragma_name(key: str) -> None:

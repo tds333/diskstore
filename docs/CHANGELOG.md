@@ -6,6 +6,7 @@
 - `scripts/busy_load.py` — multi-process load test asserting that every busy condition surfaces as `BusyError` rather than a raw driver error; run it with `--backend apsw|sqlite3`
 
 ### Fixed
+- The stdlib backend no longer leaks a file descriptor per abandoned thread. Connections were created via a `ClosingConnection` subclass that closed itself in `__del__`, but a finalizer runs on the GC thread and sqlite3 refuses to close a connection created by another thread, so the `close()` raised `ProgrammingError` and the handle was never released. Since DiskStore keeps connections in thread-local state, every thread that ended without calling `close()` leaked a descriptor for the life of the process. `connect()` now returns a plain `sqlite3.Connection`, whose handle is reclaimed with the object, matching the APSW backend
 - `is_busy()` now recognises a re-raised `BusyError` on the APSW backend; the diskstore `BusyError` subclasses `apsw.BusyError` rather than `apsw.Error`, so a `while is_busy(exc): retry` loop no longer spins forever when APSW is active
 - `clear()`, `check(vacuum=True)`, `_migrate_table()`, `set_pragma()` and `table_columns()` now raise `BusyError` under contention instead of leaking the raw driver error. All of these ran on connection setup or on write paths while bypassing the busy translation in `execute()`
 - A failed `auto_migrate` migration no longer leaves the connection inside a transaction. `_migrate_table()` opened `BEGIN IMMEDIATE` without a rollback on error, so a failure part-way through adding columns kept the write lock held and blocked every other writer to that database until the connection was closed
@@ -13,6 +14,7 @@
 
 ### Changed
 - The stdlib backend's `BusyError` now derives from `sqlite3.Error` rather than `sqlite3.OperationalError`, mirroring the apsw shape where `apsw.BusyError` sits directly under `apsw.Error`. Note `SQLError` *is* `sqlite3.Error` on that backend, so a `BusyError` remains a `SQLError` there while it is not one under apsw; catch `(BusyError, SQLError)` to cover both backends
+- A `DiskStore` whose connection is garbage collected without `close()` now emits sqlite3's `ResourceWarning: unclosed database`, where the removed `__del__` finalizer used to hide it. The warning is the intended signal that `close()` was missed; it is raised during finalization, so it prints but cannot fail a test. Store the object and call `close()` (or use it as a context manager) to avoid it
 
 ## 0.6.0 (2026-10-01)
 
