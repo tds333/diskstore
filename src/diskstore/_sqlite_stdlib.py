@@ -49,8 +49,16 @@ class ClosingConnection(sqlite3.Connection):
             pass
 
 
-class BusyError(sqlite3.OperationalError):
-    """Raised when SQLite reports a busy condition."""
+class BusyError(sqlite3.Error):
+    """Raised when SQLite reports a busy condition.
+
+    Derives from ``sqlite3.Error`` rather than ``sqlite3.OperationalError``
+    to mirror the apsw backend, where ``apsw.BusyError`` sits directly under
+    ``apsw.Error``.  Note that ``SQLError`` *is* ``sqlite3.Error`` on this
+    backend, so a ``BusyError`` is unavoidably also a ``SQLError`` here while
+    it is not one under apsw; catch ``(BusyError, SQLError)`` to get both
+    backends' behaviour.
+    """
 
 
 def is_busy(exc: sqlite3.Error) -> bool:
@@ -114,9 +122,19 @@ def set_pragma(con: Connection, key: str, value: Any) -> None:
 
     SQLite does not accept bound parameters in PRAGMA statements, so the
     name is validated and the value quoted as a literal.
+
+    Busy conditions are translated to :class:`BusyError` as in
+    ``_sqlite.execute``.  DiskStore applies its default pragmas on every
+    fresh connection, so this is reachable whenever a new connection's
+    pragma setup races another writer.
     """
     _check_pragma_name(key)
-    con.execute(f"PRAGMA {key}={quote_literal(value)}")
+    try:
+        con.execute(f"PRAGMA {key}={quote_literal(value)}")
+    except sqlite3.Error as exc:
+        if is_busy(exc):
+            raise BusyError(str(exc)) from exc
+        raise
 
 
 def get_pragma(con: Connection, key: str) -> Any:
@@ -127,5 +145,15 @@ def get_pragma(con: Connection, key: str) -> Any:
 
 
 def table_columns(con: Connection, table: str) -> list[tuple]:
-    """Return ``PRAGMA table_info`` rows for *table*."""
-    return con.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
+    """Return ``PRAGMA table_info`` rows for *table*.
+
+    Translates busy conditions to :class:`BusyError` like ``set_pragma``.
+    ``PRAGMA table_info`` needs to read the schema, which can be blocked
+    during connection setup on either backend.
+    """
+    try:
+        return con.execute(f"PRAGMA table_info({_quote_identifier(table)})").fetchall()
+    except sqlite3.Error as exc:
+        if is_busy(exc):
+            raise BusyError(str(exc)) from exc
+        raise

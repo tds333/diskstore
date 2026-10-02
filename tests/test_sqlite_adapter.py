@@ -112,8 +112,27 @@ def test_table_columns(dbpath) -> None:
         con.close()
 
 
-def test_busy_error_is_operational_error() -> None:
-    assert issubclass(_sqlite_stdlib.BusyError, sqlite3.OperationalError)
+def test_busy_error_is_a_driver_error() -> None:
+    """BusyError derives from sqlite3.Error, mirroring the apsw shape.
+
+    It is deliberately not an OperationalError subclass: on this backend
+    SQLError *is* sqlite3.Error, so BusyError is unavoidably a SQLError here.
+    Deriving from OperationalError would add nothing and would imply a
+    narrower meaning than apsw's apsw.BusyError, which sits directly under
+    apsw.Error.
+    """
+    assert issubclass(_sqlite_stdlib.BusyError, sqlite3.Error)
+    assert not issubclass(_sqlite_stdlib.BusyError, sqlite3.OperationalError)
+
+
+def test_non_busy_driver_errors_remain_sql_errors() -> None:
+    """The classes SQLError exists to catch must not be affected.
+
+    BusyError is a SQLError on this backend by construction, so what matters
+    is that real non-busy driver errors keep being SQLErrors.
+    """
+    assert issubclass(sqlite3.OperationalError, _sqlite_stdlib.SQLError)
+    assert issubclass(sqlite3.IntegrityError, _sqlite_stdlib.SQLError)
 
 
 def test_check_version_rejects_old_sqlite(monkeypatch) -> None:

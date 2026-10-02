@@ -2,9 +2,17 @@
 
 ## Unreleased
 
+### Added
+- `scripts/busy_load.py` — multi-process load test asserting that every busy condition surfaces as `BusyError` rather than a raw driver error; run it with `--backend apsw|sqlite3`
+
 ### Fixed
 - `is_busy()` now recognises a re-raised `BusyError` on the APSW backend; the diskstore `BusyError` subclasses `apsw.BusyError` rather than `apsw.Error`, so a `while is_busy(exc): retry` loop no longer spins forever when APSW is active
-- `clear()` and `check(vacuum=True)` now raise `BusyError` under contention instead of leaking the raw driver error, matching the other write operations
+- `clear()`, `check(vacuum=True)`, `_migrate_table()`, `set_pragma()` and `table_columns()` now raise `BusyError` under contention instead of leaking the raw driver error. All of these ran on connection setup or on write paths while bypassing the busy translation in `execute()`
+- A failed `auto_migrate` migration no longer leaves the connection inside a transaction. `_migrate_table()` opened `BEGIN IMMEDIATE` without a rollback on error, so a failure part-way through adding columns kept the write lock held and blocked every other writer to that database until the connection was closed
+- Corrected the `is_busy()` docstring on the APSW backend, which wrongly claimed APSW exposes no error code. The code is available as `exc.extendedresult` (`exc.result` for the primary code), the counterpart to the stdlib backend's `sqlite_errorname`, and both drivers report `SQLITE_BUSY_SNAPSHOT` correctly
+
+### Changed
+- The stdlib backend's `BusyError` now derives from `sqlite3.Error` rather than `sqlite3.OperationalError`, mirroring the apsw shape where `apsw.BusyError` sits directly under `apsw.Error`. Note `SQLError` *is* `sqlite3.Error` on that backend, so a `BusyError` remains a `SQLError` there while it is not one under apsw; catch `(BusyError, SQLError)` to cover both backends
 
 ## 0.6.0 (2026-10-01)
 

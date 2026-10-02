@@ -1542,6 +1542,122 @@ def test_busy_check_vacuum_raises_busy_error(busy_store):
         busy_store.check(vacuum=True)
 
 
+def test_busy_table_migration_raises_busy_error(tmpfilename):
+    """Creating the table must raise BusyError, not a raw driver error.
+
+    ``_migrate_table`` runs on every fresh connection and issued its CREATE
+    TABLE / BEGIN / ALTER / COMMIT through the connection's execute()
+    directly, bypassing the busy translation.  Under multi-process load a
+    racing connection saw a raw driver error here.
+
+    Calls ``_migrate_table`` directly: going through a store operation would
+    fail on the statement itself first, which says nothing about migration.
+    The table is left absent and the holder holds BEGIN EXCLUSIVE, so the
+    CREATE TABLE branch is the one that contends for the write lock.
+    """
+    from diskstore import _sqlite
+
+    holder = _sqlite.connect(tmpfilename, timeout=5.0)
+    cursor = holder.cursor()
+    cursor.execute("BEGIN EXCLUSIVE")
+    cursor.execute("CREATE TABLE other(x)")
+
+    try:
+        con = _sqlite.connect(tmpfilename, timeout=0.001)
+        try:
+            with pytest.raises(BusyError):
+                DiskStore._migrate_table(con, BaseConfig())
+        finally:
+            con.close()
+    finally:
+        holder.close()
+
+
+def test_busy_migration_begin_raises_busy_error(tmpfilename):
+    """The auto_migrate BEGIN IMMEDIATE must raise BusyError.
+
+    This is the one contended statement in the ALTER branch: once the write
+    lock is held, the ALTER and COMMIT that follow cannot themselves go busy.
+    """
+    from diskstore import _sqlite
+
+    class Old(NamedTuple):
+        title: str
+
+    class New(NamedTuple):
+        title: str
+        count: int = 0
+
+    store = DiskStore(tmpfilename, NamedTupleConfig(Old, tablename="data"))
+    store["a"] = Old("hello")
+    store.close()
+
+    holder = _sqlite.connect(tmpfilename, timeout=5.0)
+    cursor = holder.cursor()
+    cursor.execute("BEGIN EXCLUSIVE")
+    cursor.execute("INSERT INTO data VALUES ('z', 'z')")
+
+    try:
+        con = _sqlite.connect(tmpfilename, timeout=0.001)
+        try:
+            with pytest.raises(BusyError):
+                DiskStore._migrate_table(
+                    con, NamedTupleConfig(New, tablename="data")
+                )
+        finally:
+            con.close()
+    finally:
+        holder.close()
+
+
+def test_migration_rolls_back_on_failure(tmpfilename):
+    """A failed migration must not leave the write lock held.
+
+    ``_migrate_table`` opens BEGIN IMMEDIATE and has no rollback on error, so
+    a failure mid-loop left the connection inside a transaction holding the
+    write lock, blocking every other writer to the database until close.
+    """
+    from diskstore import _sqlite
+
+    class Old(NamedTuple):
+        title: str
+
+    class New(NamedTuple):
+        title: str
+        count: int = 0
+
+    store = DiskStore(tmpfilename, NamedTupleConfig(Old, tablename="data"))
+    store["a"] = Old("hello")
+    store.close()
+
+    con = _sqlite.connect(tmpfilename, timeout=5.0)
+    original = DiskStore._get_field_create
+
+    def boom(*args, **kwargs):
+        raise ValueError("synthetic failure inside the migration loop")
+
+    DiskStore._get_field_create = staticmethod(boom)
+    try:
+        with pytest.raises(ValueError, match="synthetic failure"):
+            DiskStore._migrate_table(
+                con, NamedTupleConfig(New, tablename="data")
+            )
+    finally:
+        DiskStore._get_field_create = staticmethod(original)
+
+    # The connection must no longer be inside a transaction: a second
+    # BEGIN IMMEDIATE on the same connection would raise if one were open.
+    other = _sqlite.connect(tmpfilename, timeout=0.05)
+    try:
+        other_cursor = other.cursor()
+        # Would raise BusyError if the failed migration still held the lock.
+        other_cursor.execute("BEGIN IMMEDIATE")
+        other_cursor.execute("ROLLBACK")
+    finally:
+        other.close()
+        con.close()
+
+
 def test_clear_and_check_work_without_contention(tmpfilename):
     """The two operations above must still work on an uncontended store."""
     store = DiskStore(tmpfilename, BaseConfig(timeout=5.0))

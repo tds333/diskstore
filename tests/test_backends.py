@@ -107,6 +107,97 @@ def test_busy_is_detected(backend, dbpath) -> None:
         holder.close()
 
 
+def test_set_pragma_busy_raises_busy_error(backend, dbpath) -> None:
+    """set_pragma must translate a busy condition like execute() does.
+
+    DiskStore applies DEFAULT_PRAGMAS on every fresh connection, so a pragma
+    write that collides with a concurrent writer must surface as the
+    diskstore BusyError rather than the raw driver error.  This was reachable
+    under multi-process load on both backends.
+
+    The database is deliberately left in the default rollback journal:
+    converting to WAL needs an exclusive lock, whereas once the file is
+    already in WAL mode the same pragma is a no-op that cannot fail.
+    """
+    setup = backend.connect(dbpath, timeout=5.0)
+    try:
+        setup.execute("CREATE TABLE t(x)")
+    finally:
+        setup.close()
+
+    holder = backend.connect(dbpath, timeout=5.0)
+    cursor = holder.cursor()
+    cursor.execute("BEGIN EXCLUSIVE")
+    cursor.execute("INSERT INTO t VALUES (1)")
+
+    other = backend.connect(dbpath, timeout=0.001)
+    try:
+        with pytest.raises(backend.BusyError):
+            backend.set_pragma(other, "journal_mode", "wal")
+    finally:
+        other.close()
+        holder.close()
+
+
+def test_set_pragma_non_busy_error_is_not_wrapped(backend, dbpath) -> None:
+    """A non-busy pragma failure must stay a driver error, not become BusyError.
+
+    Guards the translation against being too eager.  SQLite silently ignores
+    unknown pragmas, so this uses a pragma whose *value* is a bad table name,
+    which raises on both backends.  Note the stdlib message contains neither
+    "locked" nor "busy", so is_busy() must not match it either.
+    """
+    con = backend.connect(dbpath, timeout=5.0)
+    try:
+        with pytest.raises(backend.Error) as excinfo:
+            backend.set_pragma(con, "integrity_check", "no_such_table")
+        assert not isinstance(excinfo.value, backend.BusyError)
+        assert not backend.is_busy(excinfo.value)
+    finally:
+        con.close()
+
+
+def test_busy_table_columns_raises_busy_error(backend, dbpath) -> None:
+    """table_columns must translate a busy condition like execute() does.
+
+    ``PRAGMA table_info`` reads the schema, and ``_migrate_table`` calls it on
+    every fresh connection, so a contended schema read used to surface as a
+    raw driver error during connection setup.
+    """
+    setup = backend.connect(dbpath, timeout=5.0)
+    try:
+        setup.execute("CREATE TABLE t(x)")
+    finally:
+        setup.close()
+
+    holder = backend.connect(dbpath, timeout=5.0)
+    cursor = holder.cursor()
+    cursor.execute("BEGIN EXCLUSIVE")
+    cursor.execute("INSERT INTO t VALUES (1)")
+
+    other = backend.connect(dbpath, timeout=0.001)
+    try:
+        with pytest.raises(backend.BusyError):
+            backend.table_columns(other, "t")
+    finally:
+        other.close()
+        holder.close()
+
+
+def test_table_columns_non_busy_error_is_not_wrapped(backend, dbpath) -> None:
+    """A missing table is not a busy condition and must not become BusyError.
+
+    ``table_columns`` is documented as returning an empty list for an absent
+    table, so this pins that a schema miss stays a plain driver error rather
+    than being reclassified.
+    """
+    con = backend.connect(dbpath, timeout=5.0)
+    try:
+        assert backend.table_columns(con, "no_such_table") == []
+    finally:
+        con.close()
+
+
 def test_busy_error_is_detected_as_busy(backend) -> None:
     """is_busy() must recognise a BusyError it constructed itself.
 

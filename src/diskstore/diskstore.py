@@ -12,7 +12,7 @@ Examples:
 import os
 import os.path
 from collections.abc import Mapping, MutableMapping
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from typing import Any, Iterable
 
 from ._sqlite import (
@@ -135,7 +135,9 @@ class DiskStore(DiskRead, MutableMapping):
         columns in *config.fields* missing from the table are added.
 
         Migration uses ``BEGIN IMMEDIATE`` to serialise concurrent
-        callers.
+        callers.  Every statement here goes through the busy-translating
+        ``execute()`` so a contended migration surfaces as ``BusyError``
+        rather than a raw driver error.
         """
         tablename = escape_name(config.tablename)
         existing = {row[1] for row in (table_columns(con, config.tablename) or [])}
@@ -150,20 +152,31 @@ class DiskStore(DiskRead, MutableMapping):
                 f" _key {primary_key_type} PRIMARY KEY NOT NULL"
                 f", {fields_create})"
             )
-            con.execute(create_stmt)
+            execute(con.cursor(), create_stmt)
         elif config.auto_migrate:
             config_names = {f[0] for f in config.fields}
             if config_names - existing:
-                con.execute("BEGIN IMMEDIATE")
-                existing = {row[1] for row in table_columns(con, config.tablename)}
-                for field_name, field_type, default_value in config.fields:
-                    if field_name not in existing:
-                        col_def = DiskStore._get_field_create(
-                            (field_name, field_type, default_value)
-                        )
-                        alter_stmt = f"ALTER TABLE {tablename} ADD COLUMN {col_def};"
-                        con.execute(alter_stmt)
-                con.execute("COMMIT")
+                cursor = con.cursor()
+                execute(cursor, "BEGIN IMMEDIATE")
+                try:
+                    existing = {row[1] for row in table_columns(con, config.tablename)}
+                    for field_name, field_type, default_value in config.fields:
+                        if field_name not in existing:
+                            col_def = DiskStore._get_field_create(
+                                (field_name, field_type, default_value)
+                            )
+                            alter_stmt = (
+                                f"ALTER TABLE {tablename} ADD COLUMN {col_def};"
+                            )
+                            execute(cursor, alter_stmt)
+                except BaseException:
+                    # Release the write lock taken by BEGIN IMMEDIATE;
+                    # otherwise a failed migration blocks every other
+                    # writer until the connection is closed.
+                    with suppress(Exception):
+                        execute(cursor, "ROLLBACK")
+                    raise
+                execute(cursor, "COMMIT")
 
     @contextmanager
     def transact(self):
