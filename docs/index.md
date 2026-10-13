@@ -27,6 +27,7 @@ assert len(ds) == 1
 assert "key" in ds
 assert list(ds) == ["key"]
 del ds["key"]
+ds.close()
 ```
 
 ## Basic operations
@@ -61,6 +62,7 @@ assert sorted(ds.values()) == [1, 2]
 # delete
 del ds["one"]
 assert len(ds) == 1
+ds.close()
 ```
 
 ## Bulk writes
@@ -85,6 +87,7 @@ with ds.transact():
 
 # update() is transactional by default
 ds.update({i: "value" for i in range(100)})
+ds.close()
 ```
 
 `transact()` yields the active backend's cursor (`sqlite3.Cursor`, or
@@ -106,6 +109,7 @@ key = ds.add(None, "auto-generated")
 assert key is not None
 assert isinstance(key, int)
 assert ds[key] == "auto-generated"
+ds.close()
 ```
 
 ## Other `DiskStore` methods
@@ -141,6 +145,8 @@ ds.check(vacuum=True)
 # get read-only instance (shares the same DB file)
 ro = ds.get_readonly_instance()
 assert "three" in ro
+ro.close()
+ds.close()
 ```
 
 ## `DiskRead` - read-only access
@@ -207,6 +213,7 @@ config = BaseConfig(key_type=str)
 ds = DiskStore("/tmp/diskstore_config_base.db", config=config)
 ds["msg"] = "hello"
 assert ds["msg"] == "hello"
+ds.close()
 ```
 
 ### `JsonConfig` - JSON-serialised TEXT column
@@ -219,6 +226,7 @@ config = JsonConfig(key_type=str)
 ds = DiskStore("/tmp/diskstore_config_json.db", config=config)
 ds["nested"] = {"a": [1, 2, 3]}
 assert ds["nested"] == {"a": [1, 2, 3]}
+ds.close()
 ```
 
 ### `NamedTupleConfig` - one column per field
@@ -237,6 +245,7 @@ ds = DiskStore("/tmp/diskstore_config_nt.db", config=config)
 ds["origin"] = Point(0.0, 0.0)
 pt = ds["origin"]
 assert pt.x == 0.0 and pt.y == 0.0
+ds.close()
 ```
 
 ### `DataclassConfig` - one column per field
@@ -256,6 +265,7 @@ ds = DiskStore("/tmp/diskstore_config_dc.db", config=config)
 ds["widget"] = Item("Widget", 9.99)
 item = ds["widget"]
 assert item.name == "Widget" and item.price == 9.99
+ds.close()
 ```
 
 ### `PydanticConfig` - JSON-serialised model column
@@ -275,6 +285,7 @@ ds["task1"] = Task(title="Write docs")
 task = ds["task1"]
 assert task.title == "Write docs"
 assert task.done is False
+ds.close()
 ```
 
 ### `StructtypeConfig` - JSON-serialised BLOB column
@@ -294,6 +305,7 @@ ds["task1"] = Task(title="Write docs")
 task = ds["task1"]
 assert task.title == "Write docs"
 assert task.done is False
+ds.close()
 ```
 
 ### Configuration options
@@ -351,6 +363,7 @@ assert ds2[1] == ProductV2("Widget", 9.99, True)
 # New rows use both old and new fields
 ds2[2] = ProductV2("Gadget", 24.99, False)
 assert ds2[2] == ProductV2("Gadget", 24.99, False)
+ds2.close()
 ```
 
 ## Performance notes

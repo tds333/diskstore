@@ -37,19 +37,19 @@ def ro_store(store_file):
 
 
 def test_init(store_file) -> None:
-    dr = DiskRead(store_file)
-    assert dr[0] == "0"
+    with DiskRead(store_file) as dr:
+        assert dr[0] == "0"
 
 
 def test_init_tablename(store_file) -> None:
-    dr = DiskRead(store_file, BaseConfig(tablename="DiskStore"))
-    assert dr[0] == "0"
+    with DiskRead(store_file, BaseConfig(tablename="DiskStore")) as dr:
+        assert dr[0] == "0"
 
 
 def test_init_timeout(store_file) -> None:
-    dr = DiskRead(store_file, BaseConfig(timeout=1.0))
-    assert dr[0] == "0"
-    assert dr.timeout == 1.0
+    with DiskRead(store_file, BaseConfig(timeout=1.0)) as dr:
+        assert dr[0] == "0"
+        assert dr.timeout == 1.0
 
 
 @pytest.mark.parametrize("configured", [None, -1.0, -0.5])

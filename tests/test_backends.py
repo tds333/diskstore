@@ -184,16 +184,32 @@ def test_busy_table_columns_raises_busy_error(backend, dbpath) -> None:
         holder.close()
 
 
-def test_table_columns_non_busy_error_is_not_wrapped(backend, dbpath) -> None:
-    """A missing table is not a busy condition and must not become BusyError.
-
-    ``table_columns`` is documented as returning an empty list for an absent
-    table, so this pins that a schema miss stays a plain driver error rather
-    than being reclassified.
-    """
+def test_table_columns_missing_table_returns_empty(backend, dbpath) -> None:
+    """An absent table is not an error: ``table_info`` simply returns no rows."""
     con = backend.connect(dbpath, timeout=5.0)
     try:
         assert backend.table_columns(con, "no_such_table") == []
+    finally:
+        con.close()
+
+
+def test_table_columns_non_busy_error_is_not_wrapped(backend, tmp_path) -> None:
+    """A non-busy schema-read failure must stay a driver error, not BusyError.
+
+    Guards the translation in ``table_columns`` against being too eager.  A file
+    that is not a SQLite database makes the schema read fail with a plain driver
+    error whose message contains neither "locked" nor "busy", so ``is_busy()``
+    must not match it and the error must propagate unchanged.
+    """
+    bad = tmp_path / "not-a-database.db"
+    bad.write_bytes(b"this file is not a sqlite database")
+
+    con = backend.connect(str(bad), timeout=5.0)
+    try:
+        with pytest.raises(backend.Error) as excinfo:
+            backend.table_columns(con, "t")
+        assert not isinstance(excinfo.value, backend.BusyError)
+        assert not backend.is_busy(excinfo.value)
     finally:
         con.close()
 

@@ -91,9 +91,9 @@ def test_init_tablename_escape(tmpfilename) -> None:
 
 def test_init_filename(tmpfilename):
     path = pathlib.Path(tmpfilename)
-    store = DiskStore(path)
-    store.open()
-    assert os.path.exists(store.filename)
+    with DiskStore(path) as store:
+        store.open()
+        assert os.path.exists(store.filename)
 
 
 def test_migrate_table_static_create(tmpfilename) -> None:
@@ -257,31 +257,31 @@ def test_getsetdel(store) -> None:
 
 
 def test_getsetdel_memory() -> None:
-    store = DiskStore(":memory:")
-    values = [
-        1234,
-        2**12,
-        56.78,
-        "hello",
-        "hello" * 2**10,
-        b"world",
-        b"world" * 2**10,
-    ]
+    with DiskStore(":memory:") as store:
+        values = [
+            1234,
+            2**12,
+            56.78,
+            "hello",
+            "hello" * 2**10,
+            b"world",
+            b"world" * 2**10,
+        ]
 
-    for key, value in enumerate(values):
-        store[key] = value
+        for key, value in enumerate(values):
+            store[key] = value
 
-    assert len(store) == len(values)
+        assert len(store) == len(values)
 
-    for key, value in enumerate(values):
-        assert store[key] == value
+        for key, value in enumerate(values):
+            assert store[key] == value
 
-    for key, _ in enumerate(values):
-        del store[key]
+        for key, _ in enumerate(values):
+            del store[key]
 
-    assert len(store) == 0
+        assert len(store) == 0
 
-    assert store.check() == []
+        assert store.check() == []
 
 
 def test_value(store) -> None:
@@ -315,12 +315,12 @@ def test_get_readonly_instance(store) -> None:
     ]
 
     store.update(enumerate(values))
-    ro_store = store.get_readonly_instance()
 
-    assert len(ro_store) == len(values)
+    with store.get_readonly_instance() as ro_store:
+        assert len(ro_store) == len(values)
 
-    for key, value in enumerate(values):
-        assert ro_store[key] == value
+        for key, value in enumerate(values):
+            assert ro_store[key] == value
 
 
 def test_update_with_itearble(store):
@@ -1110,10 +1110,10 @@ def test_pickle(store):
         store[val] = num
 
     data = pickle.dumps(store)
-    other = pickle.loads(data)
 
-    for key in other:
-        assert other[key] == store[key]
+    with pickle.loads(data) as other:
+        for key in other:
+            assert other[key] == store[key]
 
 
 def test_pragmas(store) -> None:
@@ -1133,6 +1133,8 @@ def test_pragmas(store) -> None:
             valid = False
 
         results.append(valid)
+
+        store.close()
 
     threads = []
 
@@ -1215,6 +1217,7 @@ def test_differnt_threads(store) -> None:
         del store[number]
         store[number] = f"{number}"
         results[number] = f"{number}"
+        store.close()
 
     threads = []
 
@@ -1437,6 +1440,7 @@ def test_busy_raise_error(tmpfilename):
         with store.transact():
             store[1] = "2"
             time.sleep(0.2)
+        store.close()
 
     thread = threading.Thread(target=thread_run)
     thread.start()
@@ -1457,6 +1461,7 @@ def test_busy_retry(tmpfilename):
         with store.transact():
             store[1] = "2"
             time.sleep(0.1)
+        store.close()
 
     thread = threading.Thread(target=thread_run)
     thread.start()
@@ -1477,6 +1482,7 @@ def test_busy_implicit_write_raises_busy_error(tmpfilename):
         with store.transact():
             store[1] = "2"
             time.sleep(0.2)
+        store.close()
 
     thread = threading.Thread(target=thread_run)
     thread.start()
@@ -1495,6 +1501,7 @@ def _hold_write_lock(store, ready, stop):
         store[1] = "held"
         ready.set()
         stop.wait(3.0)
+    store.close()
 
 
 @pytest.fixture
@@ -1601,9 +1608,7 @@ def test_busy_migration_begin_raises_busy_error(tmpfilename):
         con = _sqlite.connect(tmpfilename, timeout=0.001)
         try:
             with pytest.raises(BusyError):
-                DiskStore._migrate_table(
-                    con, NamedTupleConfig(New, tablename="data")
-                )
+                DiskStore._migrate_table(con, NamedTupleConfig(New, tablename="data"))
         finally:
             con.close()
     finally:
@@ -1639,9 +1644,7 @@ def test_migration_rolls_back_on_failure(tmpfilename):
     DiskStore._get_field_create = staticmethod(boom)
     try:
         with pytest.raises(ValueError, match="synthetic failure"):
-            DiskStore._migrate_table(
-                con, NamedTupleConfig(New, tablename="data")
-            )
+            DiskStore._migrate_table(con, NamedTupleConfig(New, tablename="data"))
     finally:
         DiskStore._get_field_create = staticmethod(original)
 
@@ -1679,6 +1682,7 @@ def test_connections_are_per_thread(tmpfilename):
 
     def thread_run():
         seen.append(store._con)
+        store.close()
 
     thread = threading.Thread(target=thread_run)
     thread.start()
