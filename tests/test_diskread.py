@@ -5,6 +5,7 @@ import os
 import os.path
 import shutil
 import tempfile
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, fields
 from typing import ClassVar
@@ -190,6 +191,16 @@ def test_reversed_values(ro_store) -> None:
     assert values == list(reversed(data.values()))
 
 
+def test_con_reconnects_after_fork_bump(store_file) -> None:
+    """A simulated fork makes a store open a fresh connection."""
+    dr = DiskRead(store_file)
+    first = dr._con
+    diskread._bump_fork_generation()
+    assert dr._con is not first
+    assert dr[0] == "0"
+    dr.close()
+
+
 def test_fork_generation_bump() -> None:
     """The at-fork hook bumps the generation the child detects."""
     importlib.reload(diskread)
@@ -210,6 +221,87 @@ def test_fork_token_falls_back_to_pid(monkeypatch) -> None:
     monkeypatch.undo()
     importlib.reload(diskread)
     assert diskread._HAS_REGISTER_AT_FORK is True
+
+
+def test_close_all_closes_calling_thread_connection(store_file) -> None:
+    dr = DiskRead(store_file)
+    first = dr._con
+    assert dr.close_all() == 1
+    # A fresh connection is opened lazily on the next access.
+    assert dr._con is not first
+    dr.close()
+
+
+def test_close_all_reopens_on_next_access(store_file) -> None:
+    dr = DiskRead(store_file)
+    assert dr[0] == "0"
+    dr.close_all()
+    assert dr[0] == "0"  # transparently reopened
+    dr.close()
+
+
+def test_close_all_is_idempotent(store_file) -> None:
+    dr = DiskRead(store_file)
+    dr._con
+    assert dr.close_all() == 1
+    assert dr.close_all() == 0
+    dr.close()
+
+
+def test_close_all_closes_other_threads(store_file) -> None:
+    workers = 4
+    dr = DiskRead(store_file)
+    dr._con  # main-thread connection
+    barrier = threading.Barrier(workers + 1)
+    release = threading.Event()
+    errors: list = []
+
+    def worker() -> None:
+        try:
+            dr._con
+            barrier.wait(timeout=5.0)
+            release.wait(timeout=5.0)
+        except Exception as exc:  # pragma: no cover - failure signal
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(workers)]
+    for thread in threads:
+        thread.start()
+    barrier.wait(timeout=5.0)
+
+    closed = dr.close_all()
+    release.set()
+    for thread in threads:
+        thread.join(timeout=5.0)
+
+    assert not errors
+    assert closed == workers + 1
+    dr.close()
+
+
+def test_close_all_worker_reopens_after_close(store_file) -> None:
+    """A worker whose connection was closed out from under it reopens."""
+    dr = DiskRead(store_file)
+    opened = threading.Event()
+    closed = threading.Event()
+    result: dict = {}
+
+    def worker() -> None:
+        dr._con  # open the worker connection
+        opened.set()
+        closed.wait(timeout=5.0)
+        result["value"] = dr[0]  # must transparently rebuild the connection
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    assert opened.wait(timeout=5.0)
+
+    assert dr.close_all() == 1
+    closed.set()
+    thread.join(timeout=5.0)
+
+    assert result["value"] == "0"
+    dr.close()
 
 
 # @pytest.mark.asyncio

@@ -366,6 +366,52 @@ assert ds2[2] == ProductV2("Gadget", 24.99, False)
 ds2.close()
 ```
 
+## Threading and connection lifecycle
+
+A `DiskStore` / `DiskRead` is safe to share between threads. Each thread gets
+its **own** connection, opened lazily on first use, so operations never share a
+connection across threads. `close()` closes the calling thread's connection;
+`close_all()` closes every connection, including those opened by other threads,
+and returns how many were closed:
+
+```python
+import threading
+from diskstore import DiskStore
+
+ds = DiskStore("/tmp/diskstore_close_all.db")
+ds["one"] = 1  # opens the main thread's connection
+
+opened = threading.Event()
+release = threading.Event()
+
+def worker():
+    ds["two"] = 2           # opens a second, per-thread connection
+    opened.set()
+    release.wait(timeout=5) # stay alive so its connection stays open
+
+thread = threading.Thread(target=worker, daemon=True)
+thread.start()
+opened.wait(timeout=5)
+
+# Close the calling thread's connection and every other thread's too.
+assert ds.close_all() == 2
+
+release.set()
+thread.join(timeout=5)
+
+# The next access transparently opens a fresh connection.
+assert ds["one"] == 1
+ds.close_all()
+ds.close()
+```
+
+`close_all()` disables SQLite's cross-thread check on the stdlib backend
+(`check_same_thread=False`) so a connection can be closed from any thread; APSW
+is thread-safe already. The store still never *uses* a connection from more
+than one thread, so this only relaxes the close-time guard. Call it when the
+other threads are not mid-operation — closing a connection that another thread
+is actively using is still a race — which makes it a teardown-time operation.
+
 ## Performance notes
 
 DiskStore uses the Python standard-library `sqlite3` module by default, so it

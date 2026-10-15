@@ -29,7 +29,7 @@ from ._sqlite import (
 )
 from .config import ConfigProtocol, escape_name, get_sqlite_type
 from .const import DEFAULT_PRAGMAS, MISSING, NO_DEFAULT, KeyType
-from .diskread import DiskRead, _fork_token
+from .diskread import DiskRead, _fork_token, _Holder
 
 
 class DiskStore(DiskRead, MutableMapping):
@@ -80,15 +80,16 @@ class DiskStore(DiskRead, MutableMapping):
 
     @property
     def _con(self) -> Connection:
-        # Detect process forking via a fork token. On a fork the token
-        # changes, so the inherited connection is closed and recreated.
+        # A change in the fork token or the close generation (a fork, or a
+        # close_all()) invalidates the cached connection, which is dropped and
+        # recreated.
 
         local = self._local
-        token = _fork_token()
+        generation = _fork_token() + self._close_generation
 
-        if local.fork_token != token:
+        if local.generation != generation:
             self.close()
-            local.fork_token = token
+            local.generation = generation
 
         con = local.con
 
@@ -100,17 +101,34 @@ class DiskStore(DiskRead, MutableMapping):
             for key, value in self._pragmas.items():
                 set_pragma(con, key, value)
             self._migrate_table(con, self._config)
-            self._local.con = con
+
+            holder = _Holder(con)
+            local.con = con
+            local.holder = holder
+            with self._lock:
+                self._holders.add(holder)
 
         return con
 
     def close(self) -> None:
-        """Close the database connection if open."""
+        """Close this thread's database connection if open."""
         # The per-thread transaction marker belongs to the connection, so
         # drop it whenever the connection goes away (explicit close or the
         # fork reconnect in ``_con``).
         self._local.in_transaction = False
         super().close()
+
+    def close_all(self) -> int:
+        """Close every open connection, including those of other threads.
+
+        As in :meth:`DiskRead.close_all`, but the calling thread's transaction
+        marker is cleared here; other threads drop theirs when they rebuild
+        their connection on the next access.
+
+        Returns the number of connections closed.
+        """
+        self._local.in_transaction = False
+        return super().close_all()
 
     @staticmethod
     def _get_field_create(field_tuple):

@@ -4,6 +4,7 @@
 
 ### Added
 - `scripts/busy_load.py` — multi-process load test asserting that every busy condition surfaces as `BusyError` rather than a raw driver error; run it with `--backend apsw|sqlite3`
+- `DiskRead.close_all()` / `DiskStore.close_all()` close every open connection, including connections belonging to other threads, and return the number closed. Connections are opened with SQLite's cross-thread check disabled so they can be closed from any thread; the store still keeps one connection per thread and never uses one from more than one thread, so only the close-time guard is relaxed. A thread that touches the store afterwards transparently rebuilds its own connection. Intended for teardown, when the store is no longer in use
 
 ### Fixed
 - The stdlib backend no longer leaks a file descriptor per abandoned thread. Connections were created via a `ClosingConnection` subclass that closed itself in `__del__`, but a finalizer runs on the GC thread and sqlite3 refuses to close a connection created by another thread, so the `close()` raised `ProgrammingError` and the handle was never released. Since DiskStore keeps connections in thread-local state, every thread that ended without calling `close()` leaked a descriptor for the life of the process. `connect()` now returns a plain `sqlite3.Connection`, whose handle is reclaimed with the object, matching the APSW backend

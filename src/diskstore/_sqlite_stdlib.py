@@ -80,6 +80,11 @@ def connect(
 
     ``isolation_level=None`` matches APSW's autocommit default so the
     explicit ``BEGIN IMMEDIATE`` handling in ``transact`` keeps working.
+
+    ``check_same_thread=False`` lets ``DiskStore.close_all()`` close a
+    connection opened by another thread.  The store keeps one connection per
+    thread and never uses a connection from two threads at once, so the flag
+    only relaxes the close-time guard, not any real access.
     """
     check_version()
     if readonly:
@@ -88,8 +93,14 @@ def connect(
             uri=True,
             timeout=timeout,
             isolation_level=None,
+            check_same_thread=False,
         )
-    return sqlite3.connect(filename, timeout=timeout, isolation_level=None)
+    return sqlite3.connect(
+        filename,
+        timeout=timeout,
+        isolation_level=None,
+        check_same_thread=False,
+    )
 
 
 def _check_pragma_name(key: str) -> None:

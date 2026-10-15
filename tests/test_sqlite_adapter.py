@@ -193,6 +193,26 @@ def test_connect_uses_plain_connection(dbpath) -> None:
         con.close()
 
 
+def test_connect_allows_cross_thread_close(dbpath) -> None:
+    """diskstore connections disable sqlite3's thread check.
+
+    ``close_all()`` closes connections owned by other threads, which the
+    stdlib driver refuses unless ``check_same_thread=False`` was set at
+    creation.  The store still keeps one connection per thread, so it never
+    actually runs a single connection from two threads at once.
+    """
+    box: dict = {}
+
+    def make() -> None:
+        box["con"] = _sqlite_stdlib.connect(dbpath)
+
+    thread = threading.Thread(target=make)
+    thread.start()
+    thread.join()
+
+    box["con"].close()  # must not raise ProgrammingError
+
+
 @pytest.mark.skipif(
     sys.version_info < (3, 11),
     reason="sqlite3 only rejects a cross-thread close() from 3.11 onwards",

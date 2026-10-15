@@ -12,6 +12,7 @@ Examples:
 import os
 import os.path
 import threading
+import weakref
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
 from contextlib import closing
 from typing import Generator, Optional, Sequence, TypeAlias, Union
@@ -42,6 +43,22 @@ def _fork_token() -> int:
 BasicType: TypeAlias = Union[bytes, str, int, float]
 
 
+class _Holder:
+    """A live connection held weakly by the store's registry.
+
+    ``sqlite3.Connection`` objects cannot be weak-referenced, so the store
+    registers these holders in a :class:`weakref.WeakSet` instead.  When a
+    thread's local state is collected the holder (and with it the connection)
+    is reclaimed exactly as before, so the registry never keeps an abandoned
+    thread's file descriptor alive.
+    """
+
+    __slots__ = ("__weakref__", "con")
+
+    def __init__(self, con: Connection) -> None:
+        self.con = con
+
+
 class _ThreadState(threading.local):
     """Per-thread connection state.
 
@@ -53,8 +70,12 @@ class _ThreadState(threading.local):
 
     con: Connection | None = None
     cursor: Cursor | None = None
-    fork_token: int | None = None
+    # The fork token and the store's close generation summed into one value.
+    # Both only ever increase, so a change in either -- a fork, or a
+    # ``close_all()`` -- makes the sum differ and the connection is rebuilt.
+    generation: int | None = None
     in_transaction: bool = False
+    holder: _Holder | None = None
 
 
 class DiskKeysView(KeysView):
@@ -117,6 +138,15 @@ class DiskRead(Mapping):
         self._pragmas.update(self._config.pragmas)
         self._local: _ThreadState = _ThreadState()
 
+        # Registry of live connections so ``close_all()`` can reach every
+        # thread's connection.  ``_close_generation`` counts ``close_all()``
+        # calls; added to the global fork token it forms the generation each
+        # thread's cached connection is stamped with, so either a fork or a
+        # ``close_all()`` makes that thread rebuild its connection.
+        self._holders: weakref.WeakSet[_Holder] = weakref.WeakSet()
+        self._lock = threading.Lock()
+        self._close_generation = 0
+
         # precreated statements based on tablename and value_class
         tablename = escape_name(self._config.tablename)
         fields = ", ".join(f"{escape_name(field)}" for field, *_ in self._config.fields)
@@ -146,27 +176,32 @@ class DiskRead(Mapping):
 
     @property
     def _con(self) -> Connection:
-        # Detect process forking via a fork token. On a fork the token
-        # changes, so the inherited connection is closed and recreated.
+        # A change in the fork token or the close generation (a fork, or a
+        # close_all()) invalidates the cached connection, which is dropped and
+        # recreated.
 
         local = self._local
-        token = _fork_token()
+        generation = _fork_token() + self._close_generation
 
-        if local.fork_token != token:
+        if local.generation != generation:
             self.close()
-            local.fork_token = token
+            local.generation = generation
 
         con = local.con
 
         if con is None:
-            con = local.con = connect(
-                self._filename, readonly=True, timeout=self._timeout
-            )
+            con = connect(self._filename, readonly=True, timeout=self._timeout)
 
             # Some SQLite pragmas work on a per-connection basis so
             # apply them all on fresh connection
             for key, value in self._pragmas.items():
                 set_pragma(con, key, value)
+
+            holder = _Holder(con)
+            local.con = con
+            local.holder = holder
+            with self._lock:
+                self._holders.add(holder)
 
         return con
 
@@ -175,10 +210,11 @@ class DiskRead(Mapping):
         # Reuse a single cursor per thread for single-shot operations to
         # avoid a cursor allocation per call. Iteration and transact() use
         # their own cursors so nested reads stay safe.  Fast path avoids the
-        # _con property; the slow path (fresh thread or fork) creates it.
+        # _con property; the slow path (fresh thread, fork or close_all())
+        # creates it.
         local = self._local
         cursor = local.cursor
-        if cursor is None or local.fork_token != _fork_token():
+        if cursor is None or local.generation != _fork_token() + self._close_generation:
             cursor = local.cursor = self._con.cursor()
         return cursor
 
@@ -271,13 +307,57 @@ class DiskRead(Mapping):
         return self
 
     def close(self) -> None:
-        """Close the database connection if open."""
-        con = self._local.con
+        """Close this thread's database connection if open."""
+        local = self._local
+        con = local.con
         if con is None:
             return
         con.close()
-        self._local.con = None
-        self._local.cursor = None
+        local.con = None
+        local.cursor = None
+        holder = local.holder
+        if holder is not None:
+            with self._lock:
+                self._holders.discard(holder)
+            local.holder = None
+
+    def close_all(self) -> int:
+        """Close every open connection, including those of other threads.
+
+        Connections opened by the calling thread are always closed.  Other
+        threads' connections are closed too: each connection is created with
+        SQLite's cross-thread check disabled (or by APSW, which is
+        thread-safe), so it can be closed from a different thread than the one
+        that opened it.
+
+        Any thread that touches the store afterwards transparently rebuilds
+        its own connection, exactly as after :meth:`close`.
+
+        Only call this when the other threads are not mid-operation; closing a
+        connection another thread is actively using is still a race.  It is
+        intended for teardown, when the store is no longer being used.
+
+        Returns the number of connections closed.
+        """
+        with self._lock:
+            # Bump the close generation so every thread rebuilds its connection
+            # on next use, then snapshot the holders that exist right now.
+            self._close_generation += 1
+            holders = list(self._holders)
+
+        closed = 0
+        for holder in holders:
+            holder.con.close()
+            with self._lock:
+                self._holders.discard(holder)
+            closed += 1
+
+        # Forget this thread's local state as well.
+        local = self._local
+        local.con = None
+        local.cursor = None
+        local.holder = None
+        return closed
 
     def __enter__(self):
         connection = self._con  # noqa

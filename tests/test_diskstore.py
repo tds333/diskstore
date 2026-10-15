@@ -1243,22 +1243,68 @@ def test_thread_state_defaults_and_isolation(store) -> None:
         seen["defaults"] = (
             local.con,
             local.cursor,
-            local.fork_token,
+            local.generation,
             local.in_transaction,
+            local.holder,
         )
         local.in_transaction = True
-        local.fork_token = 12345
+        local.generation = 12345
 
     thread = threading.Thread(target=worker)
     thread.start()
     thread.join()
 
     # A fresh thread sees the class-level defaults, not another thread's state.
-    assert seen["defaults"] == (None, None, None, False)
+    assert seen["defaults"] == (None, None, None, False, None)
     # Writes made in the worker stay in the worker.
     assert store._local.in_transaction is False
-    assert store._local.fork_token != 12345
+    assert store._local.generation != 12345
     assert store._con is main_con
+
+
+def test_close_all_reopens_and_resets_transaction(tmpfilename) -> None:
+    store = DiskStore(tmpfilename)
+    store[0] = "seed"
+    with store.transact():
+        store[1] = "one"
+
+    assert store.close_all() == 1
+
+    # The next access lazily rebuilds a fresh connection; writes still work.
+    store[2] = "two"
+    assert store[2] == "two"
+    store.close()
+
+
+def test_close_all_closes_other_threads_diskstore(tmpfilename) -> None:
+    workers = 3
+    store = DiskStore(tmpfilename)
+    store.get(0)  # main-thread connection
+    barrier = threading.Barrier(workers + 1)
+    release = threading.Event()
+    errors: list = []
+
+    def worker() -> None:
+        try:
+            store.get(0)
+            barrier.wait(timeout=5.0)
+            release.wait(timeout=5.0)
+        except Exception as exc:  # pragma: no cover - failure signal
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(workers)]
+    for thread in threads:
+        thread.start()
+    barrier.wait(timeout=5.0)
+
+    closed = store.close_all()
+    release.set()
+    for thread in threads:
+        thread.join(timeout=5.0)
+
+    assert not errors
+    assert closed == workers + 1
+    store.close()
 
 
 def test_cursor_reuse_single_shot_ops(store) -> None:
