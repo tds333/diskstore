@@ -291,6 +291,7 @@ def test_close_all_worker_reopens_after_close(store_file) -> None:
         opened.set()
         closed.wait(timeout=5.0)
         result["value"] = dr[0]  # must transparently rebuild the connection
+        dr.close()  # close the rebuilt connection on its own thread
 
     thread = threading.Thread(target=worker)
     thread.start()

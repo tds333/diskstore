@@ -316,7 +316,7 @@ class DiskRead(Mapping):
         local.con = None
         local.cursor = None
         holder = local.holder
-        if holder is not None:
+        if holder is not None:  # pragma: no branch - set iff con is set
             with self._lock:
                 self._holders.discard(holder)
             local.holder = None
