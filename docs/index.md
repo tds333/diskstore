@@ -12,7 +12,7 @@ blobs, JSON, `NamedTuple`s, dataclasses and Pydantic models.
 - Pure-Python on top of the standard-library `sqlite3` module, with an optional APSW accelerator
 - 100 % test coverage
 - Thread-safe and process-safe (fork‑safe)
-- Developed on Python 3.14, tested on CPython 3.10–3.14
+- Developed on Python 3.14, tested on CPython 3.10–3.15 (including free-threaded 3.14t and 3.15t)
 - Tested using GitHub Actions on Linux and macOS
 
 ## Quickstart
@@ -314,7 +314,7 @@ Every config class accepts:
 
 | Option | Default | Description |
 |---|---|---|
-| `tablename` | `"DiskStore"` | SQLite table name |
+| `tablename` | `"DiskStore"` | SQLite table name (class name for `NamedTupleConfig`, `DataclassConfig`, `PydanticConfig` and `StructtypeConfig`) |
 | `key_type` | `bytes` (BLOB) | `int`, `str`, `float`, `bytes` or a SQLite type string |
 | `timeout` | `10.0` | Busy timeout in seconds |
 | `pragmas` | `{}` | Extra PRAGMAs merged with built-in defaults |
@@ -323,8 +323,9 @@ Every config class accepts:
 ### Table migration
 
 When `auto_migrate=True` (the default), `_migrate_table()` is called on every
-first connection per-process.  It creates the table if absent, then adds any
-columns that exist in the config but are missing from the existing table.
+fresh connection (per thread, and after a fork or `close_all()`).  It creates
+the table if absent, then adds any columns that exist in the config but are
+missing from the existing table.
 
 This makes schema evolution seamless - define a new version of your dataclass
 with additional fields and old data is preserved with defaults:
@@ -411,6 +412,33 @@ is thread-safe already. The store still never *uses* a connection from more
 than one thread, so this only relaxes the close-time guard. Call it when the
 other threads are not mid-operation — closing a connection that another thread
 is actively using is still a race — which makes it a teardown-time operation.
+
+## Errors and contention
+
+Mapping and configuration errors use the usual exceptions (`KeyError`,
+`ValueError`). SQLite failures surface as the active backend's error classes,
+with one exception: busy/locked conditions on write and connection-setup paths
+are normalised to `diskstore.BusyError`, which both backends raise:
+
+```python
+from diskstore import BusyError, DiskStore
+
+ds = DiskStore("/tmp/diskstore_busy.db")
+try:
+    ds["key"] = "value"
+except BusyError:
+    # Another connection held the write lock past the configured timeout.
+    pass
+finally:
+    ds.close()
+```
+
+`BusyError` subclasses the backend's base error, so existing handlers for
+`sqlite3.Error` or `apsw.Error` still catch it. On the stdlib backend
+`SQLError` *is* `sqlite3.Error`, so a busy error is also a `SQLError` there;
+under APSW it is not. Catch `(BusyError, SQLError)` to cover both. Busy
+conditions usually mean another connection held a write lock longer than the
+config's `timeout`; retry the operation or increase the timeout.
 
 ## Performance notes
 

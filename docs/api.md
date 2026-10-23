@@ -8,3 +8,7 @@
 ::: diskstore.const
 
 ::: diskstore.config
+
+## Exceptions
+
+::: diskstore.BusyError

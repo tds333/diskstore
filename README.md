@@ -6,18 +6,18 @@ in pure Python.
 Inspired by DiskCache library it implements a MutableMapping compatible sqlite
 based disk storage. Easy interface and very fast. Keys can be of basic sqlite storage
 classes defined by Python types `int`, `float`, `str`, `bytes`. Values can be of basic sqlite
-type or with custom configuration, supproting dataclasses, structtype, pydantic, ...
+type or with custom configuration, supporting dataclasses, structtype, pydantic, ...
 
 
 ## Features
 
 - Pure-Python
-- nearly 100% test coverage
+- 100% test coverage
 - Performance matters
 - Thread-safe and process-safe
-- Developed on Python 3.15
+- Developed on Python 3.14
 - Tested on CPython 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
-- Optional performance improved implementation bases on apsw.
+- Optional performance-improved implementation based on APSW.
 
 
 ## Quickstart
@@ -30,12 +30,12 @@ or
 
   $ uv add diskstore
 
-There are three basic storage classes available.
-`DiskStore`, `DiskRead` and `DiskCache`.
+There are two basic storage classes available:
+`DiskStore` and `DiskRead`. Serialisation is controlled by the config classes
+in `diskstore.config` (`BaseConfig`, `JsonConfig`, `NamedTupleConfig`,
+`DataclassConfig`, `PydanticConfig` and `StructtypeConfig`).
 
 ## User Guide
-
-Work in progress, look at unit tests for examples.
 
 Example:
 
@@ -49,29 +49,25 @@ print(ds["key"])
 
 ```
 
-See the `docs/` directory for the user guide and API reference.
+See the `docs/` directory for the user guide and API reference, or read the
+[online documentation](https://tds333.github.io/diskstore/).
 
 ### Timings
 
-These are rough measurements. Compared to Diskcache library.
+Rough measurements against `diskcache.Index` on the same machine (Python 3.14.9,
+1 KB values, 100 000 operations, one process, median per operation):
 
-Diskstore library:
+| Operation | diskstore (`sqlite3`) | diskstore (`apsw`) | diskcache |
+|---|---|---|---|
+| get | 3.8 µs | 3.6 µs | 4.3 µs |
+| set | 3.1 µs | 2.9 µs | 26.0 µs |
+| delete | 18.6 µs | 21.0 µs | 20.3 µs |
 
-set: 28.8 µs
-get: 3.23 µs
-set/delete: 84 µs
-
-Diskcache library:
-
-set: 196 µs
-get: 15.5 µs
-set/delete: 535 µs
-
-
-Why is the Diskstore library faster than others. Overhead is eliminated and 
-operations where optimized. If [APSW](https://rogerbinns.github.io/apsw/)
-is installed (`pip install diskstore[apsw]`) it is used automatically
-for furhter performance improvements.
+Run `make bench` to reproduce. DiskStore is faster because per-operation
+overhead is eliminated and the SQL statements are optimised. If
+[APSW](https://rogerbinns.github.io/apsw/) is installed
+(`pip install diskstore[apsw]`) it is used automatically for further
+performance improvements.
 
 
 License

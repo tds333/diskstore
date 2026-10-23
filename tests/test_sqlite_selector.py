@@ -132,6 +132,23 @@ def test_selector_exports_common_helpers() -> None:
         assert hasattr(_sqlite, name), name
 
 
+def test_package_exports_busy_error() -> None:
+    # Run in a fresh process: other tests reload _sqlite, which rebinds its
+    # classes while the package root keeps the original import.
+    code = (
+        "from diskstore import BusyError, _sqlite\n"
+        "assert BusyError is _sqlite.BusyError\n"
+        "assert issubclass(BusyError, _sqlite.Error)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_selector_execute_translates() -> None:
     with tempfile.NamedTemporaryFile(suffix=".db") as handle:
         dbpath = handle.name

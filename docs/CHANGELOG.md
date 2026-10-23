@@ -3,6 +3,7 @@
 ## 0.7.0 (2026-10-23)
 
 ### Added
+- `BusyError` is exported from the package root (`from diskstore import BusyError`)
 - `scripts/busy_load.py` — multi-process load test asserting that every busy condition surfaces as `BusyError` rather than a raw driver error; run it with `--backend apsw|sqlite3`
 - `DiskRead.close_all()` / `DiskStore.close_all()` close every open connection, including connections belonging to other threads, and return the number closed. Connections are opened with SQLite's cross-thread check disabled so they can be closed from any thread; the store still keeps one connection per thread and never uses one from more than one thread, so only the close-time guard is relaxed. A thread that touches the store afterwards transparently rebuilds its own connection. Intended for teardown, when the store is no longer in use
 
