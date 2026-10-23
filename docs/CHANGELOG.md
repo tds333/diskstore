@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-10-23)
 
 ### Added
 - `scripts/busy_load.py` — multi-process load test asserting that every busy condition surfaces as `BusyError` rather than a raw driver error; run it with `--backend apsw|sqlite3`
