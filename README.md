@@ -15,7 +15,6 @@ type or with custom configuration, supporting dataclasses, structtype, pydantic,
 - 100% test coverage
 - Performance matters
 - Thread-safe and process-safe
-- Developed on Python 3.14
 - Tested on CPython 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
 - Optional performance-improved implementation based on APSW.
 
