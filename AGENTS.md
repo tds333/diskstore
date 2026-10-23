@@ -10,7 +10,7 @@ Single-package Python library providing fast SQLite-backed `MutableMapping`/`Map
 - **Format**: `uvx ruff format src/`
 - **Type check**: `uvx ty check src/` (`ty` call has `-` prefix in `make check` — its exit code is ignored). `make check` runs ty + ruff (lint); `make type-check` runs ty only.
 - **Docs**: `zensical` (mkdocs-compatible), not plain mkdocs. Build with `uv run --group docs zensical build`
-- **Python**: `>=3.10`, default 3.14 (`.python-version`). CI tests:
+- **Python**: `>=3.10`. CI tests:
   - `make test-all`: 3.10–3.15 (stable releases)
   - `make test-latest`: 3.14t + 3.15t (free-threaded), both backends
 
