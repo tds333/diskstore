@@ -14,10 +14,10 @@ import os.path
 import threading
 import weakref
 from collections.abc import ItemsView, KeysView, Mapping, ValuesView
-from contextlib import closing
+from contextlib import closing, suppress
 from typing import Generator, Optional, Sequence, TypeAlias, Union
 
-from ._sqlite import Connection, Cursor, connect, set_pragma
+from ._sqlite import Connection, Cursor, apply_pragmas, connect
 from .config import BaseConfig, ConfigProtocol, escape_name
 from .const import DEFAULT_RO_PRAGMAS, TIMEOUT, KeyType
 
@@ -191,11 +191,14 @@ class DiskRead(Mapping):
 
         if con is None:
             con = connect(self._filename, readonly=True, timeout=self._timeout)
-
-            # Some SQLite pragmas work on a per-connection basis so
-            # apply them all on fresh connection
-            for key, value in self._pragmas.items():
-                set_pragma(con, key, value)
+            try:
+                # Some SQLite pragmas work on a per-connection basis so
+                # apply them all on fresh connection
+                apply_pragmas(con, self._pragmas, timeout=self._timeout)
+            except BaseException:
+                with suppress(Exception):
+                    con.close()
+                raise
 
             holder = _Holder(con)
             local.con = con

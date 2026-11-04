@@ -10,6 +10,9 @@ busy translation lives here.
 """
 
 import os
+import random
+import time
+from collections.abc import Mapping
 from typing import Any, Protocol, cast
 
 from ._sqlite_common import (  # noqa: F401  (re-exported)
@@ -82,6 +85,39 @@ set_pragma = _impl.set_pragma
 get_pragma = _impl.get_pragma
 table_columns = _impl.table_columns
 is_busy = _impl.is_busy
+
+_RETRY_BASE_DELAY = 0.001
+_RETRY_MAX_DELAY = 0.05
+
+
+def apply_pragmas(
+    con: Any, pragmas: Mapping[str, Any], *, timeout: float = TIMEOUT
+) -> None:
+    """Apply *pragmas* to *con*, retrying transient busy conditions.
+
+    ``PRAGMA journal_mode=WAL`` upgrades a shared lock to an exclusive one.
+    When two connections attempt that upgrade at the same time, SQLite
+    deliberately skips the busy handler (waiting could deadlock) and returns
+    ``SQLITE_BUSY`` immediately.  The failed statement releases its shared
+    lock, so retrying lets one process win the conversion while the others
+    find the database already in WAL mode.
+
+    Retries stop once *timeout* seconds have elapsed; the per-attempt busy
+    waits the drivers already perform are unchanged.  A zero timeout keeps
+    the single-attempt behaviour.
+    """
+    deadline = time.monotonic() + timeout
+    for key, value in pragmas.items():
+        delay = _RETRY_BASE_DELAY
+        while True:
+            try:
+                set_pragma(con, key, value)
+                break
+            except BusyError:
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(random.uniform(delay / 2, delay))
+                delay = min(delay * 2, _RETRY_MAX_DELAY)
 
 
 def execute(cursor: Cursor, sql: str, parameters: Any = ()) -> Cursor:

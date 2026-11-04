@@ -20,11 +20,11 @@ from ._sqlite import (
     Connection,
     Cursor,
     SQLError,  # noqa: F401  (re-exported)
+    apply_pragmas,
     connect,
     execute,
     executemany,
     format_sql_value,
-    set_pragma,
     table_columns,
 )
 from .config import ConfigProtocol, escape_name, get_sqlite_type
@@ -95,12 +95,15 @@ class DiskStore(DiskRead, MutableMapping):
 
         if con is None:
             con = connect(self._filename, timeout=self._timeout)
-
-            # Some SQLite pragmas work on a per-connection basis so
-            # apply them all on fresh connection
-            for key, value in self._pragmas.items():
-                set_pragma(con, key, value)
-            self._migrate_table(con, self._config)
+            try:
+                # Some SQLite pragmas work on a per-connection basis so
+                # apply them all on fresh connection
+                apply_pragmas(con, self._pragmas, timeout=self._timeout)
+                self._migrate_table(con, self._config)
+            except BaseException:
+                with suppress(Exception):
+                    con.close()
+                raise
 
             holder = _Holder(con)
             local.con = con

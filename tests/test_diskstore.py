@@ -1541,6 +1541,37 @@ def test_busy_implicit_write_raises_busy_error(tmpfilename):
     store.close()
 
 
+def test_open_retries_first_wal_conversion_busy(tmpfilename, monkeypatch):
+    """A transient busy on the first WAL conversion must not fail the open.
+
+    Two processes opening a brand-new database at the same time both try to
+    upgrade a shared lock to exclusive.  SQLite skips the busy handler in that
+    situation and returns ``SQLITE_BUSY`` immediately, so connection setup
+    retries instead of surfacing ``BusyError``.
+    """
+    from diskstore import _sqlite  # noqa: PLC0415
+
+    real = _sqlite.set_pragma
+    failures = []
+
+    def flaky(con, key, value):
+        if key == "journal_mode" and not failures:
+            failures.append(key)
+            raise _sqlite.BusyError("database is locked")
+        return real(con, key, value)
+
+    monkeypatch.setattr(_sqlite, "set_pragma", flaky)
+
+    store = DiskStore(tmpfilename, BaseConfig(timeout=1.0))
+    try:
+        store[1] = "value"
+        assert store[1] == "value"
+    finally:
+        store.close()
+
+    assert failures == ["journal_mode"]
+
+
 def _hold_write_lock(store, ready, stop):
     """Hold a write lock on *store* until *stop* is set."""
     with store.transact():

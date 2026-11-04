@@ -316,7 +316,7 @@ Every config class accepts:
 |---|---|---|
 | `tablename` | `"DiskStore"` | SQLite table name (class name for `NamedTupleConfig`, `DataclassConfig`, `PydanticConfig` and `StructtypeConfig`) |
 | `key_type` | `bytes` (BLOB) | `int`, `str`, `float`, `bytes` or a SQLite type string |
-| `timeout` | `10.0` | Busy timeout in seconds |
+| `timeout` | `10.0` | Busy timeout and connection-setup retry budget, in seconds |
 | `pragmas` | `{}` | Extra PRAGMAs merged with built-in defaults |
 | `auto_migrate` | `True` | Auto-add missing columns at connection start |
 
@@ -439,6 +439,13 @@ finally:
 under APSW it is not. Catch `(BusyError, SQLError)` to cover both. Busy
 conditions usually mean another connection held a write lock longer than the
 config's `timeout`; retry the operation or increase the timeout.
+
+Connection setup retries transient busy conditions for up to the configured
+`timeout`. This matters when several processes open a brand-new database at
+the same time: converting it to WAL needs an exclusive lock, and SQLite
+returns `SQLITE_BUSY` immediately when two connections try that upgrade at
+once instead of invoking the busy handler. A `BusyError` raised while opening
+therefore means another connection held the lock for the whole timeout.
 
 ## Performance notes
 

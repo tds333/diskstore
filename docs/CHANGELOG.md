@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `scripts/startup_race.py` — optional multi-process test for simultaneous first opens of a new database. It needs `os.fork`, so it cannot run on Windows or Pyodide and is not part of the pytest suite
+
+### Fixed
+- Simultaneous first opens of a new database no longer fail with `BusyError` while converting to WAL. `PRAGMA journal_mode=WAL` upgrades a shared lock to exclusive, and SQLite skips the busy handler when two connections attempt that upgrade at once, returning `SQLITE_BUSY` immediately regardless of `timeout`. Connection setup now retries transient busy conditions with exponential backoff and jitter, up to the configured `timeout`
+
 ## 0.7.0 (2026-10-23)
 
 ### Added

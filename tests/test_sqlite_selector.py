@@ -121,6 +121,7 @@ def test_selector_exports_common_helpers() -> None:
         "SQLError",
         "Error",
         "connect",
+        "apply_pragmas",
         "set_pragma",
         "get_pragma",
         "table_columns",
@@ -177,6 +178,48 @@ def test_selector_executemany_translates() -> None:
     finally:
         other.close()
         holder.close()
+
+
+def test_apply_pragmas_retries_busy(monkeypatch) -> None:
+    """A transient busy pragma must be retried, then apply normally."""
+    calls = []
+
+    def flaky(con, key, value):
+        calls.append((key, value))
+        if len(calls) < 3:
+            raise _sqlite.BusyError("database is locked")
+
+    monkeypatch.setattr(_sqlite, "set_pragma", flaky)
+    _sqlite.apply_pragmas(None, {"journal_mode": "wal"}, timeout=1.0)
+    assert calls == [("journal_mode", "wal")] * 3
+
+
+def test_apply_pragmas_zero_timeout_attempts_once(monkeypatch) -> None:
+    """A zero timeout keeps the old single-attempt behaviour."""
+    calls = []
+
+    def busy(con, key, value):
+        calls.append(key)
+        raise _sqlite.BusyError("database is locked")
+
+    monkeypatch.setattr(_sqlite, "set_pragma", busy)
+    with pytest.raises(_sqlite.BusyError, match="locked"):
+        _sqlite.apply_pragmas(None, {"journal_mode": "wal"}, timeout=0.0)
+    assert calls == ["journal_mode"]
+
+
+def test_apply_pragmas_leaves_other_errors_alone(monkeypatch) -> None:
+    """Only busy conditions are retried; other failures propagate at once."""
+    calls = []
+
+    def broken(con, key, value):
+        calls.append(key)
+        raise ValueError("not busy")
+
+    monkeypatch.setattr(_sqlite, "set_pragma", broken)
+    with pytest.raises(ValueError, match="not busy"):
+        _sqlite.apply_pragmas(None, {"cache_size": 1}, timeout=1.0)
+    assert calls == ["cache_size"]
 
 
 def test_selector_error_translation_leaves_other_errors_alone() -> None:
