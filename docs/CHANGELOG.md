@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 (2026-11-07)
 
 ### Added
 - `scripts/startup_race.py` — optional multi-process test for simultaneous first opens of a new database. It needs `os.fork`, so it cannot run on Windows or Pyodide and is not part of the pytest suite
