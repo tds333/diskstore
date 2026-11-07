@@ -22,7 +22,7 @@ from typing import ClassVar, NamedTuple, Optional
 import pytest
 
 from diskstore import DiskRead, DiskStore
-from diskstore._sqlite import get_pragma, table_columns
+from diskstore._sqlite import Error, get_pragma, table_columns
 from diskstore.config import (
     BaseConfig,
     DataclassConfig,
@@ -1570,6 +1570,50 @@ def test_open_retries_first_wal_conversion_busy(tmpfilename, monkeypatch):
         store.close()
 
     assert failures == ["journal_mode"]
+
+
+@pytest.mark.parametrize("fail_point", ["apply_pragmas", "table_columns"])
+def test_failed_connection_setup_closes_con(tmpfilename, monkeypatch, fail_point):
+    """A failure while setting up a fresh connection must not leak the handle.
+
+    Connection setup applies pragmas and migrates the table; if either raises,
+    the just-opened connection is closed and nothing is cached, so the next
+    access starts from a clean connection instead of a half-initialised one.
+    """
+    from diskstore import diskstore as ds_mod  # noqa: PLC0415
+
+    created = []
+    real_connect = ds_mod.connect
+
+    def spy_connect(*args, **kwargs):
+        con = real_connect(*args, **kwargs)
+        created.append(con)
+        return con
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("setup failed")
+
+    monkeypatch.setattr(ds_mod, "connect", spy_connect)
+    monkeypatch.setattr(ds_mod, fail_point, boom)
+
+    store = DiskStore(tmpfilename, BaseConfig())
+    try:
+        with pytest.raises(RuntimeError, match="setup failed"):
+            _ = store._con
+        # Nothing is cached and the fresh handle was really closed, so no
+        # half-initialised connection can be reused or leaked.
+        assert store._local.con is None
+        assert len(store._holders) == 0
+        # sqlite3 raises ProgrammingError, apsw ConnectionClosedError; both
+        # derive from the active backend's Error, re-exported by _sqlite.
+        with pytest.raises(Error):
+            created[0].execute("SELECT 1")
+
+        monkeypatch.undo()  # failure cleared
+        store[1] = "value"  # next access builds a fresh connection
+        assert store[1] == "value"
+    finally:
+        store.close()
 
 
 def _hold_write_lock(store, ready, stop):

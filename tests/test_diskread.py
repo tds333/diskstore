@@ -13,6 +13,7 @@ from typing import ClassVar
 import pytest
 
 from diskstore import DiskRead, DiskStore, diskread
+from diskstore._sqlite import Error
 from diskstore.config import BaseConfig, NamedTupleConfig
 from diskstore.const import TIMEOUT
 
@@ -199,6 +200,45 @@ def test_con_reconnects_after_fork_bump(store_file) -> None:
     assert dr._con is not first
     assert dr[0] == "0"
     dr.close()
+
+
+def test_failed_connection_setup_closes_con(store_file, monkeypatch) -> None:
+    """A failure while setting up a fresh connection must not leak the handle.
+
+    The read-only path applies pragmas on a fresh connection; if that raises,
+    the connection is closed and nothing is cached for reuse.
+    """
+    created = []
+    real_connect = diskread.connect
+
+    def spy_connect(*args, **kwargs):
+        con = real_connect(*args, **kwargs)
+        created.append(con)
+        return con
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("setup failed")
+
+    monkeypatch.setattr(diskread, "connect", spy_connect)
+    monkeypatch.setattr(diskread, "apply_pragmas", boom)
+
+    dr = DiskRead(store_file)
+    try:
+        with pytest.raises(RuntimeError, match="setup failed"):
+            _ = dr._con
+        # Nothing is cached and the fresh handle was really closed, so no
+        # half-initialised connection can be reused or leaked.
+        assert dr._local.con is None
+        assert len(dr._holders) == 0
+        # sqlite3 raises ProgrammingError, apsw ConnectionClosedError; both
+        # derive from the active backend's Error, re-exported by _sqlite.
+        with pytest.raises(Error):
+            created[0].execute("SELECT 1")
+
+        monkeypatch.undo()  # failure cleared
+        assert dr[0] == "0"  # next access builds a fresh connection
+    finally:
+        dr.close()
 
 
 def test_fork_generation_bump() -> None:
