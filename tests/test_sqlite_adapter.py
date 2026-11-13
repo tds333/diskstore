@@ -213,10 +213,6 @@ def test_connect_allows_cross_thread_close(dbpath) -> None:
     box["con"].close()  # must not raise ProgrammingError
 
 
-@pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="sqlite3 only rejects a cross-thread close() from 3.11 onwards",
-)
 def test_finalizer_would_fail_cross_thread(dbpath) -> None:
     """Demonstrates *why* the finalizer is absent, as executable documentation.
 
@@ -225,10 +221,6 @@ def test_finalizer_would_fail_cross_thread(dbpath) -> None:
     released.  This test asserts the failure still happens, which is what
     makes the absence of a finalizer in ``connect()`` necessary rather than
     incidental.
-
-    Python 3.10 is excluded: it had no cross-thread check, so ``close()``
-    succeeds from the finalizer and there is no bug to demonstrate.  The
-    descriptor-counting test above still guards that version.
     """
     failures: list[str] = []
 
@@ -293,8 +285,8 @@ def test_check_version_accepts_supported(monkeypatch) -> None:
 
 
 def test_is_busy_from_message_without_errorcode() -> None:
-    # Python 3.10's sqlite3 exposes no sqlite_errorname on raised errors,
-    # so busy detection falls back to the message.
+    # An error constructed in Python carries no sqlite_errorname, so busy
+    # detection falls back to the message.
     assert _sqlite_stdlib.is_busy(sqlite3.OperationalError("database is locked"))
 
 
@@ -310,8 +302,8 @@ def test_unclosed_connection_warns_like_plain_sqlite3(dbpath) -> None:
     # Abandoning a connection warns, and diskstore's connection behaves the
     # same as plain sqlite3's: both raise ResourceWarning on collection.
     #
-    # Python 3.10 to 3.12 are excluded: they did not emit this warning at all,
-    # so there is nothing to compare against there.
+    # Python 3.11 and 3.12 are excluded: they did not emit this warning at
+    # all, so there is nothing to compare against there.
     #
     # Run in a subprocess on purpose.  The warning is raised from the
     # connection's finalizer, and in-process the object can be kept alive by

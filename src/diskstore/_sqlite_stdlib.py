@@ -47,8 +47,8 @@ class BusyError(sqlite3.Error):
 def is_busy(exc: sqlite3.Error) -> bool:
     """Whether *exc* is a SQLite busy condition.
 
-    Python 3.11+ exposes ``sqlite_errorname`` on raised errors; Python 3.10
-    does not, so fall back to the message text there.
+    Errors raised by the driver carry ``sqlite_errorname``; errors constructed
+    in Python do not, so fall back to the message text in that case.
     """
     name = getattr(exc, "sqlite_errorname", None)
     if name is not None:

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Python 3.10 support dropped; diskstore now requires Python 3.11 or newer
+
 ## 0.8.0 (2026-11-07)
 
 ### Added
