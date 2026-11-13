@@ -343,9 +343,3 @@ def test_close_all_worker_reopens_after_close(store_file) -> None:
 
     assert result["value"] == "0"
     dr.close()
-
-
-# @pytest.mark.asyncio
-# async def test_async_query(ro_store) -> None:
-#     result = await anext(ro_store.async_query())
-#     print(result)
